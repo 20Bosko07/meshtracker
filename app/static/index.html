@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MeshTracker</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>MeshTracker</h1>
+    <span id="link-badge" class="badge off" title="">Verbindung …</span>
+    <span class="spacer"></span>
+    <label class="range">Spur:
+      <select id="range">
+        <option value="3600">1 Std.</option>
+        <option value="21600">6 Std.</option>
+        <option value="86400" selected>24 Std.</option>
+        <option value="604800">7 Tage</option>
+        <option value="0">Alles</option>
+      </select>
+    </label>
+  </header>
+
+  <main>
+    <aside>
+      <div id="trackers"></div>
+      <button id="add-btn" class="primary">+ Tracker hinzufügen</button>
+      <p id="empty-hint" class="hint" hidden>
+        Noch kein Tracker. Mit „Tracker hinzufügen“ den Public Key deiner Tracker-Karte eintragen
+        oder aus den Kontakten des Nodes wählen.
+      </p>
+    </aside>
+    <div id="map"></div>
+  </main>
+
+  <dialog id="dlg">
+    <form method="dialog" id="form">
+      <h2 id="dlg-title">Tracker</h2>
+      <label id="pick-row">Kontakt vom Node wählen
+        <select id="f-pick"><option value="">– manuell eingeben –</option></select>
+      </label>
+      <label>Name <input id="f-name" maxlength="40" required></label>
+      <label id="key-row">Public Key (64 Hex-Zeichen)
+        <input id="f-key" maxlength="64" pattern="[0-9a-fA-F]{64}" spellcheck="false" required>
+      </label>
+      <label>Abfrage-Intervall (Minuten)
+        <input id="f-interval" type="number" min="1" max="1440" value="10" required>
+      </label>
+      <label>Routing
+        <select id="f-mode">
+          <option value="auto">Auto: gespeicherter Pfad, bei Fehler sofort Flood</option>
+          <option value="flood">Immer Flood (für bewegte Tracker am zuverlässigsten)</option>
+        </select>
+      </label>
+      <label class="inline" id="enabled-row"><input id="f-enabled" type="checkbox" checked> Abfragen aktiv</label>
+      <p id="form-error" class="error" hidden></p>
+      <menu>
+        <button type="button" id="cancel">Abbrechen</button>
+        <button type="submit" class="primary">Speichern</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

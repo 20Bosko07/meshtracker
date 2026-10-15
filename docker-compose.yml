@@ -1,0 +1,39 @@
+services:
+  meshtracker:
+    build: .
+    image: meshtracker:latest
+    container_name: meshtracker
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - meshtracker-data:/data
+    environment:
+      # --- Verbindung zum MeshCore-Companion --------------------------------
+      # tcp    = WiFi-Companion-Firmware ODER MeshMonitor Virtual Node
+      # serial = Companion per USB (dann unten "devices" aktivieren)
+      # sim    = Simulator (Demo ohne Funkhardware)
+      MT_TRANSPORT: tcp
+      MT_HOST: 192.168.1.50      # <- IP von MeshMonitor-Host bzw. Companion
+      MT_PORT: 5000              # <- Port des Virtual Node bzw. des Companion (WiFi: 5000)
+      # MT_SERIAL_PORT: /dev/ttyACM0
+      # MT_SERIAL_BAUD: 115200
+
+      # --- Optional: Passwortschutz der Weboberfläche -------------------------
+      # MT_AUTH_USER: admin
+      # MT_AUTH_PASSWORD: bitte-aendern
+
+      # --- Feintuning (Defaults passen meistens) --------------------------------
+      # MT_FLOOD_RETRIES: 2           # Flood-Wiederholungen nach totem Pfad
+      # MT_PATH_TIMEOUT: 10           # min. Wartezeit Pfad-Versuch (s)
+      # MT_FLOOD_TIMEOUT: 25          # min. Wartezeit Flood-Versuch (s)
+      # MT_MIN_SPACING: 10            # Mindestabstand zwischen Anfragen (s)
+      # MT_FAIL_RETRY: 180            # Wiederholung nach Fehlschlag (s)
+    # Für USB-Betrieb (MT_TRANSPORT=serial):
+    # devices:
+    #   - /dev/ttyACM0:/dev/ttyACM0
+    # group_add:
+    #   - dialout
+
+volumes:
+  meshtracker-data:

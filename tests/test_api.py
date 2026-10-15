@@ -1,0 +1,79 @@
+import dataclasses
+import time
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app.config import Settings
+from app.main import create_app
+from app.sim import SIM_KEY, SimLink
+
+KEY = "ab" * 32
+
+
+def client(tmp_path, **kw):
+    s = dataclasses.replace(Settings(), transport="sim", db_path=str(tmp_path / "a.db"),
+                            min_spacing=0, flood_backoff=0, **kw)
+    return TestClient(create_app(s, SimLink(seed=1, path_breaks_after=99)))
+
+
+def test_sim_seeds_tracker_and_poll_flow(tmp_path):
+    with client(tmp_path) as c:
+        trackers = c.get("/api/trackers").json()
+        assert len(trackers) == 1 and trackers[0]["public_key"] == SIM_KEY
+        tid = trackers[0]["id"]
+        assert c.post(f"/api/trackers/{tid}/poll").status_code == 202
+        for _ in range(60):
+            t = c.get("/api/trackers").json()[0]
+            if t["last_poll"]:
+                break
+            time.sleep(0.2)
+        assert t["fix"]["source"] == "telemetry"
+        assert t["last_poll"]["ok"] == 1
+        assert c.get(f"/api/trackers/{tid}/track").json()[0]["lat"] > 47
+        gpx = c.get(f"/api/trackers/{tid}/export.gpx")
+        assert gpx.status_code == 200 and "<trkpt" in gpx.text
+        assert c.get("/api/status").json()["connected"] is True
+
+
+def test_validation_and_crud(tmp_path):
+    with client(tmp_path) as c:
+        bad = c.post("/api/trackers", json={"name": "x", "public_key": "zz"})
+        assert bad.status_code == 422
+        ok = c.post("/api/trackers", json={"name": " Zweiter ", "public_key": "CD" * 32, "interval_min": 5})
+        assert ok.status_code == 201 and ok.json()["public_key"] == "cd" * 32 and ok.json()["name"] == "Zweiter"
+        assert c.post("/api/trackers", json={"name": "d", "public_key": "cd" * 32}).status_code == 409
+        tid = ok.json()["id"]
+        p = c.patch(f"/api/trackers/{tid}", json={"interval_min": 15, "route_mode": "flood", "enabled": False})
+        assert p.json()["interval_min"] == 15 and p.json()["route_mode"] == "flood" and p.json()["enabled"] is False
+        assert c.patch(f"/api/trackers/{tid}", json={"route_mode": "quatsch"}).status_code == 422
+        assert c.delete(f"/api/trackers/{tid}").status_code == 204
+        assert c.get(f"/api/trackers/{tid}/track").status_code == 404
+
+
+def test_reset_path_endpoint(tmp_path):
+    with client(tmp_path) as c:
+        tid = c.get("/api/trackers").json()[0]["id"]
+        assert c.post(f"/api/trackers/{tid}/reset-path").json() == {"ok": True}
+        assert c.get("/api/trackers").json()[0]["route_now"] == "flood"
+
+
+def test_contacts_listing(tmp_path):
+    with client(tmp_path) as c:
+        contacts = c.get("/api/contacts").json()
+        assert contacts[0]["name"] == "Sim-Tracker" and contacts[0]["tracked"] is True
+
+
+def test_basic_auth(tmp_path):
+    with client(tmp_path, auth_user="u", auth_password="p") as c:
+        assert c.get("/api/status").status_code == 401
+        assert c.get("/healthz").status_code == 200
+        assert c.get("/api/status", auth=("u", "p")).status_code == 200
+        assert c.get("/api/status", auth=("u", "falsch")).status_code == 401
+
+
+def test_static_index_served(tmp_path):
+    with client(tmp_path) as c:
+        r = c.get("/")
+        assert r.status_code == 200 and "MeshTracker" in r.text
+        assert c.get("/vendor/leaflet/leaflet.js").status_code == 200
