@@ -121,3 +121,25 @@ def test_timeout_reports_wait_time(tmp_path):
         res = await svc.poll_once(db.get_tracker(tr["id"]))
         assert not res.ok and "keine Antwort innerhalb" in res.error
     run(tmp_path, lambda n: (setattr(n, "path_dead", True), setattr(n, "flood_ok", False)), body)
+
+
+def test_old_virtual_node_without_binary_req_uses_legacy_command(tmp_path):
+    """MeshMonitor-Stand ohne BinaryReq: Err(UnsupportedCmd) → alter Befehl 0x27."""
+    async def body(node, link, svc, db, tr):
+        res = await svc.poll_once(tr)
+        assert res.ok and res.has_gps, res.error
+        fix = db.latest_fix(tr["id"])
+        assert abs(fix["lat"] - 47.3769) < 1e-4 and fix["route"] == "path"
+        assert node.binary_attempts == 1
+        res2 = await svc.poll_once(tr)           # merkt sich den Weg, kein erneuter BinaryReq
+        assert res2.ok and node.binary_attempts == 1
+        assert {s["type"] for s in db.latest_sensors(tr["id"])} == {"voltage", "temperature"}
+    run(tmp_path, lambda n: setattr(n, "legacy_only", True), body)
+
+
+def test_legacy_command_timeout_and_flood_fallback(tmp_path):
+    async def body(node, link, svc, db, tr):
+        res = await svc.poll_once(tr)
+        assert res.ok and res.route == "flood", res.error
+        assert node.requests == ["path", "flood"] and node.resets == 1
+    run(tmp_path, lambda n: (setattr(n, "legacy_only", True), setattr(n, "path_dead", True)), body)

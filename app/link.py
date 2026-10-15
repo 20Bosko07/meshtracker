@@ -79,6 +79,8 @@ class MeshCoreLink:
         self._mc = None
         self._advert_cb: AdvertCallback | None = None
         self._stopping = False
+        # Ältere MeshMonitor-Virtual-Nodes kennen BinaryReq nicht → alter Befehl.
+        self._legacy_telemetry = False
 
     # --- Zustand -----------------------------------------------------------
 
@@ -144,6 +146,7 @@ class MeshCoreLink:
             return False
 
         mc.auto_update_contacts = True
+        self._legacy_telemetry = False
         mc.subscribe(EventType.ADVERTISEMENT, self._on_advert)
         self._mc = mc
         try:
@@ -176,9 +179,6 @@ class MeshCoreLink:
         await self._mc.commands.get_contacts()
 
     async def request_telemetry(self, key: str, min_timeout: float) -> TelemetryReply:
-        from meshcore import EventType
-        from meshcore.packets import BinaryReqType
-
         mc = self._mc
         if mc is None:
             return TelemetryReply(None, "nicht verbunden", refused=True)
@@ -186,25 +186,68 @@ class MeshCoreLink:
         if contact is None:
             return TelemetryReply(None, "Kontakt unbekannt", refused=True)
         try:
-            sent = await mc.commands.send_binary_req(
-                contact, BinaryReqType.TELEMETRY, timeout=0, min_timeout=min_timeout
-            )
-            if sent.type == EventType.ERROR:
-                reason = describe_refusal(sent.payload)
-                log.warning("Telemetrie-Anfrage: %s", reason)
-                return TelemetryReply(None, reason, refused=True)
-            wait = max(sent.payload.get("suggested_timeout", 4000) / 800.0, min_timeout)
-            event = await mc.dispatcher.wait_for_event(
-                EventType.TELEMETRY_RESPONSE,
-                attribute_filters={"tag": sent.payload["expected_ack"].hex()},
-                timeout=wait,
-            )
+            if not self._legacy_telemetry:
+                reply = await self._telemetry_binary(mc, contact, min_timeout)
+                if not (reply.refused and "UNSUPPORTED_CMD" in (reply.error or "")):
+                    return reply
+                log.info("Gerät kennt BinaryReq nicht – wechsle auf den älteren Telemetrie-Befehl")
+                self._legacy_telemetry = True
+            return await self._telemetry_legacy(mc, contact, min_timeout)
         except Exception as exc:
             log.warning("Telemetrie-Anfrage fehlgeschlagen: %s", exc)
             return TelemetryReply(None, f"Fehler: {exc}")
+
+    async def _telemetry_binary(self, mc, contact: dict, min_timeout: float) -> TelemetryReply:
+        """Aktueller Weg: BinaryReq(TELEMETRY), Antwort per Tag zugeordnet."""
+        from meshcore import EventType
+        from meshcore.packets import BinaryReqType
+
+        sent = await mc.commands.send_binary_req(
+            contact, BinaryReqType.TELEMETRY, timeout=0, min_timeout=min_timeout
+        )
+        if sent.type == EventType.ERROR:
+            reason = describe_refusal(sent.payload)
+            log.warning("Telemetrie-Anfrage: %s", reason)
+            return TelemetryReply(None, reason, refused=True)
+        wait = max(sent.payload.get("suggested_timeout", 4000) / 800.0, min_timeout)
+        event = await mc.dispatcher.wait_for_event(
+            EventType.TELEMETRY_RESPONSE,
+            attribute_filters={"tag": sent.payload["expected_ack"].hex()},
+            timeout=wait,
+        )
         if event is None:
             return TelemetryReply(None, f"keine Antwort innerhalb {wait:.0f} s")
         return TelemetryReply(event.payload["lpp"])
+
+    async def _telemetry_legacy(self, mc, contact: dict, min_timeout: float) -> TelemetryReply:
+        """Älterer Weg (SEND_TELEMETRY_REQ 0x27): Antwort kommt als Push mit
+        6-Byte-Schlüsselpräfix. Vor dem Senden abonnieren, damit keine schnelle
+        Antwort verloren geht."""
+        from meshcore import EventType
+
+        key = bytes.fromhex(contact["public_key"])
+        got: asyncio.Future = asyncio.get_running_loop().create_future()
+
+        async def on_response(event) -> None:
+            if not got.done():
+                got.set_result(event.payload.get("lpp"))
+
+        sub = mc.subscribe(EventType.TELEMETRY_RESPONSE, on_response,
+                           attribute_filters={"pubkey_prefix": key[:6].hex()})
+        try:
+            sent = await mc.commands.send(b"\x27\x00\x00\x00" + key, [EventType.MSG_SENT, EventType.ERROR])
+            if sent.type == EventType.ERROR:
+                reason = describe_refusal(sent.payload)
+                log.warning("Telemetrie-Anfrage (alter Befehl): %s", reason)
+                return TelemetryReply(None, reason, refused=True)
+            wait = max(sent.payload.get("suggested_timeout", 4000) / 800.0, min_timeout)
+            try:
+                lpp = await asyncio.wait_for(got, wait)
+            except asyncio.TimeoutError:
+                return TelemetryReply(None, f"keine Antwort innerhalb {wait:.0f} s")
+            return TelemetryReply(lpp)
+        finally:
+            sub.unsubscribe()
 
     async def reset_path(self, key: str) -> tuple[bool, str]:
         from meshcore import EventType
