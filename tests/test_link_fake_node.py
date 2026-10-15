@@ -104,3 +104,20 @@ def test_advert_push_records_position(tmp_path):
             await asyncio.sleep(0.1)
         assert fix and fix["source"] == "advert" and abs(fix["lat"] - 47.4) < 1e-4
     run(tmp_path, lambda n: None, body)
+
+
+def test_refused_request_is_reported_with_reason_and_not_retried(tmp_path):
+    async def body(node, link, svc, db, tr):
+        res = await svc.poll_once(tr)
+        assert not res.ok
+        assert len(res.attempts) == 1
+        assert "abgelehnt" in res.error and "BAD_STATE" in res.error and "Receive-Only" in res.error
+    run(tmp_path, lambda n: setattr(n, "refuse_binary", True), body)
+
+
+def test_timeout_reports_wait_time(tmp_path):
+    async def body(node, link, svc, db, tr):
+        db.update_tracker(tr["id"], route_mode="flood")
+        res = await svc.poll_once(db.get_tracker(tr["id"]))
+        assert not res.ok and "keine Antwort innerhalb" in res.error
+    run(tmp_path, lambda n: (setattr(n, "path_dead", True), setattr(n, "flood_ok", False)), body)

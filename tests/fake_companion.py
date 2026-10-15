@@ -27,6 +27,7 @@ class FakeCompanion:
         self.path_dead = False       # Pfad antwortet nicht mehr
         self.flood_ok = True
         self.accept_reset = True
+        self.refuse_binary = False   # wie MeshMonitor im Receive-Only-Modus: Err(BadState)
         self.suggested_timeout = 240  # ms*… → Bibliothek teilt durch 800 → 0,3 s
         self.lat, self.lon = 47.3769, 8.5417
         self.requests: list[str] = []  # "path"/"flood" je Telemetrie-Anfrage
@@ -83,7 +84,7 @@ class FakeCompanion:
                 for out in self._handle(cmd):
                     writer.write(frame(out))
                 await writer.drain()
-                if cmd[0] == CMD_BINARY_REQ:
+                if cmd[0] == CMD_BINARY_REQ and not self.refuse_binary:
                     await self._maybe_respond(writer, cmd)
         except (asyncio.IncompleteReadError, ConnectionError):
             pass
@@ -101,6 +102,8 @@ class FakeCompanion:
             self.resets += 1
             self.path_len = -1
             return [bytes([PKT_OK])]
+        if code == CMD_BINARY_REQ and self.refuse_binary:
+            return [bytes([PKT_ERROR, 4])]
         if code == CMD_BINARY_REQ:
             self.requests.append("flood" if self.path_len < 0 else "path")
             return [bytes([PKT_MSG_SENT, 0]) + b"\x01\x02\x03\x04" + struct.pack("<I", self.suggested_timeout)]

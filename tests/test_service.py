@@ -134,3 +134,10 @@ def test_manual_request_poll_runs_next_tick(tmp_path):
     svc.request_poll(tr["id"])
     run(svc.tick())
     assert len(db.recent_polls(tr["id"])) == 1
+
+
+def test_refused_by_device_stops_after_first_attempt(tmp_path):
+    db, link, svc, tr, _ = make(tmp_path, SimLink(refuse=True))
+    res = run(svc.poll_once(tr))
+    assert not res.ok and link.calls == ["refused"] and link.resets == 0
+    assert "abgelehnt" in res.error

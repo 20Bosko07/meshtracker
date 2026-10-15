@@ -132,14 +132,19 @@ class TrackerService:
         max_attempts = 1 + max(0, self.s.flood_retries)
         lpp = None
         route = "flood"
+        last_reason = ""
         for n in range(max_attempts):
             contact = self.link.get_contact(key) or contact
             route = "flood" if path_len(contact) < 0 else "path"
             floor = self.s.flood_timeout_floor if route == "flood" else self.s.path_timeout_floor
             attempts.append(route)
-            lpp = await self.link.request_telemetry(key, floor)
+            reply = await self.link.request_telemetry(key, floor)
+            lpp = reply.lpp
             if lpp is not None:
                 break
+            last_reason = reply.error or ""
+            if reply.refused:
+                break  # Gerät lehnt ab – Wiederholen oder Pfad-Reset bringt nichts
             if route == "path":
                 # Pfad tot → gespeicherten Pfad löschen, nächster Versuch geht per Flood.
                 ok, why = await self.link.reset_path(key)
@@ -149,7 +154,12 @@ class TrackerService:
                 await self._sleep(self.s.flood_backoff)
 
         if lpp is None:
-            msg = f"Keine Antwort nach {len(attempts)} Versuchen ({' → '.join(attempts)})"
+            if last_reason.startswith("Anfrage abgelehnt"):
+                msg = last_reason
+            else:
+                msg = f"Keine Antwort nach {len(attempts)} Versuchen ({' → '.join(attempts)})"
+                if last_reason:
+                    msg += f": {last_reason}"
             if notes:
                 msg += "; " + "; ".join(dict.fromkeys(notes))
             return finish(PollResult(False, error=msg))

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from dataclasses import dataclass
 from typing import Awaitable, Callable, Protocol
 
 from .config import Settings
@@ -26,6 +27,31 @@ def path_len(contact: dict | None) -> int:
         return -1
 
 
+@dataclass
+class TelemetryReply:
+    """Ergebnis einer Telemetrie-Anfrage. ``refused``: Das Gerät hat die Anfrage
+    sofort abgelehnt (Wiederholen bringt nichts); sonst gab es nur keine Antwort."""
+
+    lpp: list[dict] | None
+    error: str | None = None
+    refused: bool = False
+
+
+REFUSAL_HINTS = {
+    "ERR_CODE_BAD_STATE": "Gerät im falschen Zustand – bei MeshMonitor: Source im Receive-Only-Modus?",
+    "ERR_CODE_UNSUPPORTED_CMD": "Befehl wird nicht unterstützt",
+    "ERR_CODE_NOT_FOUND": "Kontakt dem Gerät unbekannt",
+}
+
+
+def describe_refusal(payload) -> str:
+    code = payload.get("code_string") if isinstance(payload, dict) else None
+    if not code and isinstance(payload, dict) and "error_code" in payload:
+        code = f"Fehlercode {payload['error_code']}"
+    hint = REFUSAL_HINTS.get(str(code))
+    return f"Anfrage abgelehnt ({code or 'unbekannt'})" + (f": {hint}" if hint else "")
+
+
 class Link(Protocol):
     """Was der Tracker-Dienst vom Funkgerät braucht."""
 
@@ -36,7 +62,7 @@ class Link(Protocol):
     def contacts(self) -> dict[str, dict]: ...
     def get_contact(self, key: str) -> dict | None: ...
     async def refresh_contacts(self) -> None: ...
-    async def request_telemetry(self, key: str, min_timeout: float) -> list[dict] | None: ...
+    async def request_telemetry(self, key: str, min_timeout: float) -> TelemetryReply: ...
     async def reset_path(self, key: str) -> tuple[bool, str]: ...
     def set_advert_callback(self, cb: AdvertCallback) -> None: ...
     async def run(self) -> None: ...
@@ -149,19 +175,36 @@ class MeshCoreLink:
             return
         await self._mc.commands.get_contacts()
 
-    async def request_telemetry(self, key: str, min_timeout: float) -> list[dict] | None:
-        if self._mc is None:
-            return None
+    async def request_telemetry(self, key: str, min_timeout: float) -> TelemetryReply:
+        from meshcore import EventType
+        from meshcore.packets import BinaryReqType
+
+        mc = self._mc
+        if mc is None:
+            return TelemetryReply(None, "nicht verbunden", refused=True)
         contact = self.get_contact(key)
         if contact is None:
-            return None
+            return TelemetryReply(None, "Kontakt unbekannt", refused=True)
         try:
-            return await self._mc.commands.req_telemetry_sync(
-                contact, timeout=0, min_timeout=min_timeout
+            sent = await mc.commands.send_binary_req(
+                contact, BinaryReqType.TELEMETRY, timeout=0, min_timeout=min_timeout
+            )
+            if sent.type == EventType.ERROR:
+                reason = describe_refusal(sent.payload)
+                log.warning("Telemetrie-Anfrage: %s", reason)
+                return TelemetryReply(None, reason, refused=True)
+            wait = max(sent.payload.get("suggested_timeout", 4000) / 800.0, min_timeout)
+            event = await mc.dispatcher.wait_for_event(
+                EventType.TELEMETRY_RESPONSE,
+                attribute_filters={"tag": sent.payload["expected_ack"].hex()},
+                timeout=wait,
             )
         except Exception as exc:
             log.warning("Telemetrie-Anfrage fehlgeschlagen: %s", exc)
-            return None
+            return TelemetryReply(None, f"Fehler: {exc}")
+        if event is None:
+            return TelemetryReply(None, f"keine Antwort innerhalb {wait:.0f} s")
+        return TelemetryReply(event.payload["lpp"])
 
     async def reset_path(self, key: str) -> tuple[bool, str]:
         from meshcore import EventType
