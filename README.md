@@ -66,7 +66,7 @@ Telemetrie-Anfragen beantwortet der Tracker nur, wenn er das erlaubt:
 | `MT_SERIAL_PORT` / `MT_SERIAL_BAUD` | `/dev/ttyACM0` / `115200` | bei `serial` |
 | `MT_AUTH_USER` / `MT_AUTH_PASSWORD` | – | HTTP-Basic-Schutz (beide setzen) |
 | `MT_FLOOD_RETRIES` | `2` | Flood-Wiederholungen nach totem Pfad |
-| `MT_PATH_TIMEOUT` / `MT_FLOOD_TIMEOUT` | `10` / `25` | Mindest-Wartezeit je Versuch (s); die Firmware schlägt je nach Hops ggf. mehr vor |
+| `MT_PATH_TIMEOUT` / `MT_FLOOD_TIMEOUT` | `48` / `48` | Mindest-Wartezeit je Versuch (s). Über den MeshMonitor Virtual Node nötig (der wartet intern bis 45 s); bei direkter Anbindung kann man auf 10 / 25 senken |
 | `MT_MIN_SPACING` | `10` | Mindestabstand zwischen zwei Funk-Anfragen (s) |
 | `MT_FAIL_RETRY` | `180` | Nach Fehlschlag früher erneut versuchen (s) |
 

@@ -33,8 +33,11 @@ class Settings:
 
     # Mindestwartezeit auf eine Antwort (Sekunden). Die Firmware liefert einen
     # eigenen Timeout-Vorschlag je nach Hops; das hier ist nur die Untergrenze.
-    path_timeout_floor: float = 10.0
-    flood_timeout_floor: float = 25.0
+    # Über den MeshMonitor Virtual Node wartet dieser selbst bis zu 45 s auf den
+    # Tracker – gibt man früher auf, stapeln sich die Anfragen und späte
+    # Antworten gehen verloren. Bei direkter Anbindung darf der Wert kleiner sein.
+    path_timeout_floor: float = 48.0
+    flood_timeout_floor: float = 48.0
     # Wie oft nach einem fehlgeschlagenen Pfad-Versuch per Flood wiederholt wird.
     flood_retries: int = 2
     flood_backoff: float = 5.0
