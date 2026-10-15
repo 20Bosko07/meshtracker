@@ -141,3 +141,27 @@ def test_refused_by_device_stops_after_first_attempt(tmp_path):
     res = run(svc.poll_once(tr))
     assert not res.ok and link.calls == ["refused"] and link.resets == 0
     assert "abgelehnt" in res.error
+
+
+def test_stale_contact_view_still_recovers_by_resetting(tmp_path):
+    """Virtual Node zeigt „Flood“, der Node hält aber einen toten Pfad:
+    ohne Reset würden alle Versuche ins Leere laufen."""
+    link = SimLink(path_breaks_after=99, flood_loss=0.0, real_path_dead=True)
+    link._contacts[SIM_KEY]["out_path_len"] = -1
+    db, link, svc, tr, _ = make(tmp_path, link)
+    res = run(svc.poll_once(tr))
+    assert res.ok and link.resets == 1 and link.calls == ["flood", "flood"]
+
+
+def test_flood_mode_resets_even_if_view_says_flood(tmp_path):
+    link = SimLink(path_breaks_after=99, flood_loss=0.0, real_path_dead=True)
+    link._contacts[SIM_KEY]["out_path_len"] = -1
+    db, link, svc, tr, _ = make(tmp_path, link, mode="flood")
+    res = run(svc.poll_once(tr))
+    assert res.ok and link.resets == 1 and link.calls == ["flood"]
+
+
+def test_failed_round_leaves_path_reset_for_next_poll(tmp_path):
+    db, link, svc, tr, _ = make(tmp_path, SimLink(path_breaks_after=0, flood_loss=1.0), flood_retries=1)
+    run(svc.poll_once(tr))
+    assert link.get_contact(SIM_KEY)["out_path_len"] == -1 and link.resets == 2

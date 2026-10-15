@@ -16,13 +16,16 @@ CENTER = (47.3769, 8.5417)
 
 class SimLink:
     def __init__(self, *, path_breaks_after: int = 3, flood_loss: float = 0.25,
-                 accept_reset: bool = True, refuse: bool = False, seed: int | None = None, delay: float = 0.0):
+                 accept_reset: bool = True, refuse: bool = False,
+                 real_path_dead: bool = False, seed: int | None = None, delay: float = 0.0):
         self.connected = True
         self.error = ""
         self.path_breaks_after = path_breaks_after
         self.flood_loss = flood_loss
         self.accept_reset = accept_reset
         self.refuse = refuse
+        # Der Node hält einen toten Pfad, die Kontaktliste zeigt aber „Flood“ (veraltet).
+        self.real_path_dead = real_path_dead
         self.delay = delay
         self.has_gps = True
         self.calls: list[str] = []  # "path" / "flood" je Anfrage (für Tests)
@@ -69,6 +72,8 @@ class SimLink:
             await asyncio.sleep(self.delay)
         route = "flood" if path_len(c) < 0 else "path"
         self.calls.append(route)
+        if self.real_path_dead:
+            return TelemetryReply(None, "keine Antwort innerhalb 48 s")
         if route == "path":
             if self._path_ok_count >= self.path_breaks_after:
                 return TelemetryReply(None, "keine Antwort innerhalb 10 s")  # Pfad veraltet
@@ -98,6 +103,7 @@ class SimLink:
         if not self.accept_reset:
             return False, "Gerät lehnt Pfad-Reset ab (UnsupportedCmd)"
         self.resets += 1
+        self.real_path_dead = False
         c["out_path_len"] = -1
         c["out_path"] = ""
         return True, ""

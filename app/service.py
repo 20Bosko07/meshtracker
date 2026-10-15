@@ -111,10 +111,13 @@ class TrackerService:
         if not self.link.connected:
             return finish(PollResult(False, error="Keine Verbindung zum MeshCore-Node"))
 
-        contact = self.link.get_contact(key)
-        if contact is None:
+        # Kontaktliste neu holen: Über den MeshMonitor Virtual Node ändert sich der
+        # Pfad des Trackers, ohne dass wir einen Push bekommen.
+        try:
             await self.link.refresh_contacts()
-            contact = self.link.get_contact(key)
+        except Exception as exc:
+            log.warning("Kontaktliste konnte nicht aktualisiert werden: %s", exc)
+        contact = self.link.get_contact(key)
         if contact is None:
             return finish(PollResult(
                 False,
@@ -122,8 +125,9 @@ class TrackerService:
                       "oder Kontakt auf dem Node hinzufügen",
             ))
 
-        # Modus „immer Flood“: gespeicherten Pfad vor jeder Abfrage verwerfen.
-        if tr["route_mode"] == "flood" and path_len(contact) >= 0:
+        # Modus „immer Flood“: gespeicherten Pfad vor jeder Abfrage verwerfen –
+        # unabhängig davon, was unsere Kontaktkopie zeigt (sie kann veraltet sein).
+        if tr["route_mode"] == "flood":
             ok, why = await self.link.reset_path(key)
             if not ok:
                 notes.append(f"Pfad-Reset fehlgeschlagen: {why}")
@@ -145,12 +149,13 @@ class TrackerService:
             last_reason = reply.error or ""
             if reply.refused:
                 break  # Gerät lehnt ab – Wiederholen oder Pfad-Reset bringt nichts
-            if route == "path":
-                # Pfad tot → gespeicherten Pfad löschen, nächster Versuch geht per Flood.
-                ok, why = await self.link.reset_path(key)
-                if not ok:
-                    notes.append(f"Pfad-Reset fehlgeschlagen: {why}")
-            elif n < max_attempts - 1:
+            # Keine Antwort → der Pfad auf dem Node kann tot sein, auch wenn unsere
+            # Kontaktkopie „Flood“ zeigt. Immer zurücksetzen: Der nächste Versuch (und
+            # die nächste geplante Abfrage) geht dann sicher per Flood.
+            ok, why = await self.link.reset_path(key)
+            if not ok:
+                notes.append(f"Pfad-Reset fehlgeschlagen: {why}")
+            if route == "flood" and n < max_attempts - 1:
                 await self._sleep(self.s.flood_backoff)
 
         if lpp is None:
