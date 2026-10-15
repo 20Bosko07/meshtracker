@@ -10,7 +10,9 @@ auf der Karte, dazu Akku, Temperatur & Co.
 - **Pfad → Flood automatisch:** Antwortet der gespeicherte Pfad nicht, wird er sofort verworfen
   und per Flood wiederholt (bis zu 2×). Optional „Immer Flood“ für bewegte Tracker
 - Zusätzlich werden Positionen aus Adverts übernommen
-- Spur-Zeitraum wählbar, GPX-Export, Abfrage-Protokoll (welcher Weg, wie lange, warum Fehler)
+- **Verlaufsdiagramme** unter der Karte: Akku-Spannung, Temperatur, Licht, Höhe usw. – eine Kurve pro
+  Messwert (alles, was der Tracker meldet), mit Mouseover-Wert und Tabellenansicht; Sensorverlauf bleibt 1 Jahr
+- Zeitraum wählbar, GPX-Export, Abfrage-Protokoll (welcher Weg, wie lange, warum Fehler)
 - SQLite im Volume `/data`, optionaler Passwortschutz
 
 ## Schnellstart

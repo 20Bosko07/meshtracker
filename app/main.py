@@ -224,6 +224,11 @@ def create_app(settings: Settings | None = None, link: Link | None = None) -> Fa
         need(tracker_id)
         return db_().fixes(tracker_id, since, limit)
 
+    @app.get("/api/trackers/{tracker_id}/series")
+    async def series(tracker_id: int, since: int = Query(0, ge=0)):
+        need(tracker_id)
+        return db_().series(tracker_id, since)
+
     @app.get("/api/trackers/{tracker_id}/polls")
     async def polls(tracker_id: int, limit: int = Query(20, ge=1, le=200)):
         need(tracker_id)

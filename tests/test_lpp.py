@@ -35,3 +35,14 @@ def test_real_library_output_roundtrip():
     fix, readings = extract(lpp_parse(bytes(frame)))
     assert abs(fix.lat - 47.3769) < 1e-4 and abs(fix.lon - 8.5417) < 1e-4
     assert {r.type for r in readings} == {"voltage", "temperature"}
+
+
+def test_duplicate_channel_and_type_gets_suffix_instead_of_zigzag():
+    """Sensor- und Chip-Temperatur auf demselben Kanal dürfen sich nicht überschreiben."""
+    _, readings = extract([
+        {"channel": 1, "type": "temperature", "value": 22.4},
+        {"channel": 1, "type": "illuminance", "value": 0},
+        {"channel": 1, "type": "temperature", "value": 31.0},
+    ])
+    assert [(r.type, r.value) for r in readings] == [
+        ("temperature", 22.4), ("illuminance", 0.0), ("temperature_2", 31.0)]

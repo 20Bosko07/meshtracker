@@ -1,18 +1,16 @@
 "use strict";
 
-const COLORS = ["#2563eb", "#dc2626", "#16a34a", "#d97706", "#9333ea", "#0891b2", "#db2777", "#4d7c0f"];
-const SENSOR_LABELS = {
-  voltage: ["Spannung", "V"], temperature: ["Temperatur", "°C"], humidity: ["Feuchte", "%"],
-  barometer: ["Luftdruck", "hPa"], altitude: ["Höhe", "m"], percentage: ["Akku", "%"],
-  illuminance: ["Licht", "lx"], current: ["Strom", "A"], power: ["Leistung", "W"],
-};
 
 const map = L.map("map").setView([47.37, 8.54], 11);
 L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
   maxZoom: 19, attribution: "&copy; OpenStreetMap-Mitwirkende",
 }).addTo(map);
 
-const state = { trackers: [], selected: null, layers: new Map(), fitted: false, lastTrackKey: new Map() };
+const state = {
+  trackers: [], selected: null, layers: new Map(), fitted: false, lastTrackKey: new Map(),
+  chart: { trackerId: null, key: "", view: "charts", collapsed: false },
+};
+try { state.chart.collapsed = localStorage.getItem("mt-charts-collapsed") === "1"; } catch (_) { /* kein Speicher */ }
 const $ = (id) => document.getElementById(id);
 
 function h(tag, attrs, ...kids) {
@@ -54,7 +52,9 @@ function ago(ts, now) {
   return `vor ${Math.round(s / 86400)} Tagen`;
 }
 const fmtTime = (ts) => new Date(ts * 1000).toLocaleString("de-CH");
-const colorOf = (t) => COLORS[(t.id - 1) % COLORS.length];
+// Farbe folgt dem Tracker (nicht der Listenposition): feste Reihenfolge, 8 Datenfarben.
+const seriesVar = (t) => `--series-${((t.id - 1) % 8) + 1}`;
+const colorOf = (t) => getComputedStyle(document.documentElement).getPropertyValue(seriesVar(t)).trim();
 
 function routeText(f) {
   if (!f || !f.route) return f && f.source === "advert" ? "Advert" : "";
@@ -63,10 +63,9 @@ function routeText(f) {
 }
 
 function sensorNode(s) {
-  const base = s.type.split(".")[0];
-  const [label, unit] = SENSOR_LABELS[base] || [s.type, ""];
-  const val = Number.isInteger(s.value) ? s.value : Math.round(s.value * 100) / 100;
-  return h("span", {}, `${label} `, h("b", {}, `${val}${unit ? " " + unit : ""}`));
+  const m = MeshCharts.info(s.type);
+  const val = s.value.toLocaleString("de-CH", { minimumFractionDigits: m.dec, maximumFractionDigits: m.dec });
+  return h("span", {}, `${m.label} `, h("b", {}, `${val}${m.unit ? " " + m.unit : ""}`));
 }
 
 function card(t, now) {
@@ -93,7 +92,7 @@ function card(t, now) {
   const details = h("details", { class: "log" }, h("summary", {}, "Abfrage-Protokoll"), h("ul", { id: `log-${t.id}` }));
   details.addEventListener("toggle", () => details.open && loadLog(t.id));
 
-  return h("div", { class: `card${state.selected === t.id ? " sel" : ""}`, style: `--c:${colorOf(t)}` },
+  return h("div", { class: `card${state.selected === t.id ? " sel" : ""}`, style: `--c:var(${seriesVar(t)})` },
     h("h3", { onclick: () => select(t.id, true) }, t.name,
       h("span", { class: "age", title: f ? fmtTime(f.ts) : "" }, f ? ago(f.ts, now) : "keine Position")),
     f && h("div", { class: "row" },
@@ -146,6 +145,8 @@ async function remove(t) {
 
 function select(id, zoom) {
   state.selected = id;
+  state.chart.trackerId = id;
+  updateCharts(true);
   const layer = state.layers.get(id);
   if (zoom && layer && layer.marker) map.setView(layer.marker.getLatLng(), Math.max(map.getZoom(), 15));
   render();
@@ -234,7 +235,97 @@ async function refresh() {
     }
   }
   if (!state.fitted) fitAll();
+  await updateCharts(false);
 }
+
+// --- Verlaufsdiagramme -----------------------------------------------------------
+
+function setChartView() {
+  const table = state.chart.view === "table";
+  $("chart-grid").hidden = table;
+  $("chart-table").hidden = !table;
+  $("chart-view").textContent = table ? "Diagramme" : "Tabelle";
+}
+
+async function updateCharts(force) {
+  const panel = $("charts");
+  const t = state.trackers.find((x) => x.id === state.chart.trackerId) || state.trackers[0];
+  panel.hidden = !t;
+  if (!t) return;
+  state.chart.trackerId = t.id;
+
+  const sel = $("chart-tracker");
+  sel.hidden = state.trackers.length < 2;
+  if (state.trackers.length >= 2) {
+    const sig = state.trackers.map((x) => `${x.id}:${x.name}`).join("|");
+    if (sel.dataset.sig !== sig) {
+      sel.replaceChildren(...state.trackers.map((x) => h("option", { value: x.id }, x.name)));
+      sel.dataset.sig = sig;
+    }
+    sel.value = String(t.id);
+  }
+
+  const collapsed = state.chart.collapsed;
+  $("chart-body").hidden = collapsed;
+  $("chart-toggle").textContent = collapsed ? "▸" : "▾";
+  $("chart-toggle").setAttribute("aria-expanded", String(!collapsed));
+  $("chart-view").hidden = collapsed;
+  if (collapsed) return;
+
+  const key = `${t.id}|${$("range").value}|${t.last_poll ? t.last_poll.ts : 0}|${t.fix ? t.fix.ts : 0}|${state.chart.view}`;
+  if (!force && key === state.chart.key) return;
+  state.chart.key = key;
+
+  let series;
+  try {
+    series = await api(`/api/trackers/${t.id}/series?since=${sinceTs()}`);
+  } catch (_) { return; }
+  if (state.chart.trackerId !== t.id) return; // inzwischen anderer Tracker gewählt
+
+  const grid = $("chart-grid");
+  grid.style.setProperty("--c", `var(${seriesVar(t)})`);
+  $("chart-table").style.setProperty("--c", `var(${seriesVar(t)})`);
+  const empty = $("chart-empty");
+  const usable = series.filter((s) => s.points.length > 0);
+  empty.hidden = usable.length > 0;
+  if (!usable.length) {
+    empty.textContent = "Noch keine Messwerte im gewählten Zeitraum. Sobald der Tracker auf eine Abfrage antwortet, "
+      + "erscheinen hier Akku, Temperatur, Licht, Höhe und alles, was er sonst noch meldet.";
+    grid.replaceChildren();
+    $("chart-table").replaceChildren();
+    return;
+  }
+  const first = Math.min(...usable.map((s) => s.points[0][0]));
+  const since = sinceTs();
+  const ctx = {
+    x0: since > 0 ? since : first,
+    x1: status.now,
+    gapSec: Math.max(t.interval_min * 60 * 3, 900),
+  };
+  MeshCharts.render(grid, usable, ctx);
+  MeshCharts.renderTable($("chart-table"), usable);
+  setChartView();
+}
+
+$("chart-tracker").addEventListener("change", (e) => {
+  state.chart.trackerId = Number(e.target.value);
+  updateCharts(true);
+});
+$("chart-view").addEventListener("click", () => {
+  state.chart.view = state.chart.view === "table" ? "charts" : "table";
+  setChartView();
+});
+$("chart-toggle").addEventListener("click", () => {
+  state.chart.collapsed = !state.chart.collapsed;
+  try { localStorage.setItem("mt-charts-collapsed", state.chart.collapsed ? "1" : "0"); } catch (_) { /* egal */ }
+  updateCharts(true);
+  setTimeout(() => map.invalidateSize(), 50);
+});
+// Dunkel/Hell wechselt: Karten-Farben neu lesen
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  state.lastTrackKey.clear();
+  refresh();
+});
 
 // --- Dialog ----------------------------------------------------------------------
 
@@ -298,7 +389,7 @@ $("form").addEventListener("submit", async (ev) => {
   }
 });
 
-$("range").addEventListener("change", () => { state.lastTrackKey.clear(); refresh(); });
+$("range").addEventListener("change", () => { state.lastTrackKey.clear(); state.chart.key = ""; refresh(); });
 
 refresh();
 setInterval(refresh, 5000);

@@ -77,3 +77,23 @@ def test_static_index_served(tmp_path):
         r = c.get("/")
         assert r.status_code == 200 and "MeshTracker" in r.text
         assert c.get("/vendor/leaflet/leaflet.js").status_code == 200
+
+
+def test_series_endpoint_groups_sensors_and_altitude(tmp_path):
+    with client(tmp_path) as c:
+        from app.main import create_app  # noqa: F401  (App ist über den Client bereits gestartet)
+        db = c.app.state.db
+        tid = c.get("/api/trackers").json()[0]["id"]
+        for ts, v, alt in [(1000, 4.1, 300.0), (2000, 4.0, 305.0), (3000, 3.9, None)]:
+            db.add_sensors(tid, ts, [(2, "voltage", v), (3, "temperature", 20 + v)])
+            if alt is not None:
+                db.add_fix(tid, ts, 47.0, 8.0, alt, "telemetry")
+        db.add_fix(tid, 4000, 47.0, 8.0, 999.0, "advert")   # Advert-Höhe zählt nicht
+
+        data = {s["key"]: s["points"] for s in c.get(f"/api/trackers/{tid}/series").json()}
+        assert data["voltage:2"] == [[1000, 4.1], [2000, 4.0], [3000, 3.9]]
+        assert [p[0] for p in data["temperature:3"]] == [1000, 2000, 3000]
+        assert data["gps_altitude:0"] == [[1000, 300.0], [2000, 305.0]]
+        since = {s["key"]: s["points"] for s in c.get(f"/api/trackers/{tid}/series?since=2000").json()}
+        assert since["voltage:2"] == [[2000, 4.0], [3000, 3.9]]
+        assert c.get("/api/trackers/999/series").status_code == 404

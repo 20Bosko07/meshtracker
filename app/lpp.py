@@ -31,6 +31,14 @@ def extract(lpp: list[dict] | None) -> tuple[Fix | None, list[Reading]]:
     """Trennt die GPS-Position von den übrigen Sensorwerten."""
     fix: Fix | None = None
     readings: list[Reading] = []
+    seen: dict[tuple[int, str], int] = {}
+
+    def add(channel: int, kind: str, value: float) -> None:
+        # Die Firmware hängt z. B. die Chip-Temperatur auf denselben Kanal wie den
+        # Temperatursensor. Der erste Wert behält den Namen, weitere bekommen _2, _3 …
+        n = seen[(channel, kind)] = seen.get((channel, kind), 0) + 1
+        readings.append(Reading(channel, kind if n == 1 else f"{kind}_{n}", value))
+
     for item in lpp or []:
         if not isinstance(item, dict):
             continue
@@ -47,11 +55,11 @@ def extract(lpp: list[dict] | None) -> tuple[Fix | None, list[Reading]]:
                 alt = value.get("altitude")
                 fix = Fix(lat, lon, float(alt) if alt is not None else None)
         elif isinstance(value, bool):
-            readings.append(Reading(channel, kind, float(value)))
+            add(channel, kind, float(value))
         elif isinstance(value, (int, float)):
-            readings.append(Reading(channel, kind, float(value)))
+            add(channel, kind, float(value))
         elif isinstance(value, dict):
             for sub, v in value.items():
                 if isinstance(v, (int, float)) and not isinstance(v, bool):
-                    readings.append(Reading(channel, f"{kind}.{sub}", float(v)))
+                    add(channel, f"{kind}.{sub}", float(v))
     return fix, readings

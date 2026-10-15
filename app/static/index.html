@@ -13,7 +13,7 @@
     <h1>MeshTracker</h1>
     <span id="link-badge" class="badge off" title="">Verbindung …</span>
     <span class="spacer"></span>
-    <label class="range">Spur:
+    <label class="range">Zeitraum:
       <select id="range">
         <option value="3600">1 Std.</option>
         <option value="21600">6 Std.</option>
@@ -33,7 +33,23 @@
         oder aus den Kontakten des Nodes wählen.
       </p>
     </aside>
-    <div id="map"></div>
+    <div class="stage">
+      <div id="map"></div>
+      <section id="charts" class="charts" hidden>
+        <div class="charts-head">
+          <h2>Verlauf</h2>
+          <select id="chart-tracker" aria-label="Tracker für den Verlauf" hidden></select>
+          <span class="spacer"></span>
+          <button id="chart-view" type="button">Tabelle</button>
+          <button id="chart-toggle" type="button" aria-expanded="true" title="Ein-/Ausklappen">▾</button>
+        </div>
+        <div id="chart-body">
+          <div id="chart-grid" class="chart-grid"></div>
+          <div id="chart-table" class="table-wrap" hidden></div>
+          <p id="chart-empty" class="hint chart-empty" hidden></p>
+        </div>
+      </section>
+    </div>
   </main>
 
   <dialog id="dlg">
@@ -65,6 +81,7 @@
   </dialog>
 
   <script src="vendor/leaflet/leaflet.js"></script>
+  <script src="charts.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

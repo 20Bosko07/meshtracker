@@ -166,6 +166,30 @@ class Database:
             (tracker_id, tracker_id),
         )
 
+    def series(self, tracker_id: int, since: int = 0, limit: int = 5000) -> list[dict]:
+        """Verlauf je Messwert (Sensoren + GPS-Höhe) als [[ts, wert], …]."""
+        grouped: dict[tuple[str, int], list[list[float]]] = {}
+        rows = self._all(
+            "SELECT channel, type, ts, value FROM (SELECT channel, type, ts, value FROM sensors"
+            " WHERE tracker_id = ? AND ts >= ? ORDER BY ts DESC LIMIT ?) ORDER BY ts",
+            (tracker_id, since, limit),
+        )
+        for r in rows:
+            grouped.setdefault((r["type"], r["channel"]), []).append([r["ts"], r["value"]])
+        out = [
+            {"key": f"{t}:{c}", "type": t, "channel": c, "points": pts}
+            for (t, c), pts in sorted(grouped.items())
+        ]
+        alt = self._all(
+            "SELECT ts, alt FROM (SELECT ts, alt FROM fixes WHERE tracker_id = ? AND ts >= ?"
+            " AND alt IS NOT NULL AND source = 'telemetry' ORDER BY ts DESC LIMIT ?) ORDER BY ts",
+            (tracker_id, since, limit),
+        )
+        if alt:
+            out.append({"key": "gps_altitude:0", "type": "gps_altitude", "channel": 0,
+                        "points": [[r["ts"], r["alt"]] for r in alt]})
+        return out
+
     # --- Abfrage-Protokoll -------------------------------------------------
 
     def add_poll(
@@ -191,8 +215,8 @@ class Database:
             (tracker_id, limit),
         )
 
-    def prune(self, keep_days: int = 30) -> None:
+    def prune(self, keep_days: int = 30, sensor_days: int = 365) -> None:
         """Alte Protokoll- und Sensoreinträge löschen (Positionen bleiben)."""
-        cutoff = int(time.time()) - keep_days * 86400
-        self._exec("DELETE FROM polls WHERE ts < ?", (cutoff,))
-        self._exec("DELETE FROM sensors WHERE ts < ?", (cutoff,))
+        now = int(time.time())
+        self._exec("DELETE FROM polls WHERE ts < ?", (now - keep_days * 86400,))
+        self._exec("DELETE FROM sensors WHERE ts < ?", (now - sensor_days * 86400,))
