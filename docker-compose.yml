@@ -5,7 +5,7 @@ services:
     container_name: meshtracker
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "8282:8000"   # <Host-Port>:8000 – Host-Port nach Bedarf ändern
     volumes:
       - meshtracker-data:/data
     environment:

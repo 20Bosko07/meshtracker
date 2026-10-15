@@ -19,7 +19,7 @@ auf der Karte, dazu Akku, Temperatur & Co.
 git clone <dieses-repo> && cd meshtracker
 # docker-compose.yml: MT_HOST / MT_PORT eintragen
 docker compose up -d --build
-# → http://<server>:8000
+# → http://<server>:8282
 ```
 
 Ohne Funkhardware ausprobieren: `MT_TRANSPORT=sim docker compose up --build` – ein simulierter
