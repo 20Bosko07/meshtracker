@@ -243,7 +243,10 @@ def create_app(settings: Settings | None = None, link: Link | None = None) -> Fa
     async def export_gpx(tracker_id: int, since: int = Query(0, ge=0)):
         tr = need(tracker_id)
         pts = []
-        for f in db_().fixes(tracker_id, since, 20000):
+        fixes = db_().fixes(tracker_id, since, 20000)
+        # The track is the GPS telemetry; advert positions only fill in when there is none.
+        telemetry = [f for f in fixes if f["source"] == "telemetry"]
+        for f in telemetry if len(telemetry) >= 2 else fixes:
             t = datetime.fromtimestamp(f["ts"], timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             ele = f"<ele>{f['alt']}</ele>" if f["alt"] is not None else ""
             pts.append(f'<trkpt lat="{f["lat"]:.6f}" lon="{f["lon"]:.6f}">{ele}<time>{t}</time></trkpt>')

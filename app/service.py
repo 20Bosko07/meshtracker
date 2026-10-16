@@ -202,16 +202,17 @@ class TrackerService:
         lat, lon = contact.get("adv_lat"), contact.get("adv_lon")
         if not _valid_pos(lat, lon):
             return
+        # Store an advert position only when the coordinates actually changed. Behind
+        # MeshMonitor's Virtual Node the contact's "last advert" time moves whenever the
+        # tracker is heard at all, while the coordinates stay the old advert location –
+        # storing it every time would pile up stale points with fresh timestamps.
+        last = self.db.latest_advert_fix(tr["id"])
+        if last and abs(last["lat"] - lat) < 1e-6 and abs(last["lon"] - lon) < 1e-6:
+            return
         now = int(self._clock())
         stamp = int(contact.get("last_advert") or 0)
-        if abs(stamp - now) < SANE_CLOCK_S:
-            ts = stamp
-        else:  # tracker clock not set: only store when the position changed
-            last = self.db.latest_fix(tr["id"])
-            if last and last["source"] == "advert" and \
-                    abs(last["lat"] - lat) < 1e-6 and abs(last["lon"] - lon) < 1e-6:
-                return
-            ts = now
+        # Never later than now; an unset tracker clock falls back to our own time.
+        ts = min(stamp, now) if abs(stamp - now) < SANE_CLOCK_S else now
         self.db.add_fix(tr["id"], ts, lat, lon, None, "advert")
 
     def sync_adverts(self) -> None:

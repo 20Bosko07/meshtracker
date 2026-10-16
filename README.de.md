@@ -20,7 +20,8 @@ Telemetrie-Antwort aber nicht auf die Karte. MeshTracker fragt den Tracker selbs
 
 ## Funktionen
 
-- **Spur auf der Karte** aus GPS-Telemetrie (und aus Adverts); GPX-Export
+- **Spur auf der Karte** aus GPS-Telemetrie; Positionen aus Adverts erscheinen als einzelne hohle Punkte
+  und verbinden die Linie nie; GPX-Export
 - **Abfrage-Intervall pro Tracker** (Standard 10 Min) und Knopf *Poll now* (jetzt abfragen)
 - **Pfad → Flood automatisch:** Antwortet der gespeicherte Pfad nicht, wird er zurückgesetzt und sofort
   per Flood wiederholt. Optional *Always flood* (immer Flood) für bewegte Tracker

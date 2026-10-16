@@ -170,14 +170,21 @@ async function drawTrack(t) {
   const group = L.layerGroup().addTo(map);
   layer = { group, marker: null };
   state.layers.set(t.id, layer);
-  if (fixes.length > 1) {
-    L.polyline(fixes.map((f) => [f.lat, f.lon]), { color, weight: 3, opacity: 0.7 }).addTo(group);
+  // The line follows the GPS telemetry. Advert positions are less reliable (their time and
+  // place can lag behind), so they are drawn as separate hollow dots and never connected –
+  // unless the tracker has no telemetry track at all.
+  const telemetry = fixes.filter((f) => f.source === "telemetry");
+  const lineFixes = telemetry.length > 1 ? telemetry : fixes;
+  if (lineFixes.length > 1) {
+    L.polyline(lineFixes.map((f) => [f.lat, f.lon]), { color, weight: 3, opacity: 0.7 }).addTo(group);
   }
   for (const f of fixes) {
-    L.circleMarker([f.lat, f.lon], {
-      radius: f.source === "advert" ? 3 : 4, color, weight: 1, fillColor: color,
-      fillOpacity: f.source === "advert" ? 0.3 : 0.8,
-    }).bindPopup(h("div", {}, t.name, h("br"), fmtTime(f.ts), h("br"), routeText(f) || f.source)).addTo(group);
+    const advert = f.source === "advert";
+    L.circleMarker([f.lat, f.lon], advert
+      ? { radius: 4, color, weight: 1.5, fill: false, opacity: 0.7 }
+      : { radius: 4, color, weight: 1, fillColor: color, fillOpacity: 0.8 },
+    ).bindPopup(h("div", {}, t.name, h("br"), fmtTime(f.ts), h("br"), advert ? "Advert (position reported by the tracker's advert)" : routeText(f)))
+      .addTo(group);
   }
   updateMarker(t);
 }

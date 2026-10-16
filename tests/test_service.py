@@ -165,3 +165,35 @@ def test_failed_round_leaves_path_reset_for_next_poll(tmp_path):
     db, link, svc, tr, _ = make(tmp_path, SimLink(path_breaks_after=0, flood_loss=1.0), flood_retries=1)
     run(svc.poll_once(tr))
     assert link.get_contact(SIM_KEY)["out_path_len"] == -1 and link.resets == 2
+
+
+def test_latest_position_prefers_gps_telemetry_over_a_newer_advert(tmp_path):
+    db, link, svc, tr, _ = make(tmp_path)
+    assert db.latest_fix(tr["id"]) is None
+    db.add_fix(tr["id"], 5000, 47.1, 8.1, None, "advert")
+    assert db.latest_fix(tr["id"])["source"] == "advert"        # fallback while nothing else exists
+    db.add_fix(tr["id"], 1000, 47.5, 8.5, 400.0, "telemetry")   # older timestamp, but real GPS
+    assert db.latest_fix(tr["id"])["source"] == "telemetry"
+    assert db.latest_fix(tr["id"])["lat"] == 47.5
+
+
+def test_advert_position_is_stored_only_when_it_changes(tmp_path):
+    """Via a Virtual Node the contact's 'last advert' time keeps moving while the
+    coordinates stay the old advert location – that must not pile up points."""
+    db, link, svc, tr, clock = make(tmp_path)
+    contact = link._contacts[SIM_KEY]
+    for step in range(4):
+        contact["last_advert"] = int(clock()) - 600 + step * 120   # time moves, place does not
+        run(svc.on_advert(SIM_KEY))
+    assert len(db.fixes(tr["id"])) == 1
+    contact["adv_lat"], contact["adv_lon"] = 47.40, 8.60            # the advert really moved
+    contact["last_advert"] = int(clock())
+    run(svc.on_advert(SIM_KEY))
+    assert [round(f["lat"], 2) for f in db.fixes(tr["id"])] == [47.38, 47.40]
+
+
+def test_advert_timestamp_is_never_in_the_future(tmp_path):
+    db, link, svc, tr, clock = make(tmp_path)
+    link._contacts[SIM_KEY]["last_advert"] = int(clock()) + 3600    # tracker clock one hour ahead
+    run(svc.on_advert(SIM_KEY))
+    assert db.fixes(tr["id"])[0]["ts"] <= int(clock())

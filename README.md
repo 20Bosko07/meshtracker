@@ -20,7 +20,8 @@ telemetry reply on a map. MeshTracker polls the tracker itself and does exactly 
 
 ## Features
 
-- **Map track** from GPS telemetry (and from adverts); GPX export
+- **Map track** from GPS telemetry; positions from adverts are shown as separate hollow dots and never
+  connect the line; GPX export
 - **Polling interval per tracker** (default 10 min) plus a *Poll now* button
 - **Path → flood fallback:** if the stored path is dead, MeshTracker resets it and retries by flood
   immediately. Optional *Always flood* mode for moving trackers

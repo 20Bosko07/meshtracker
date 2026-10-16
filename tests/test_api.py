@@ -105,3 +105,14 @@ def test_series_endpoint_groups_sensors_and_altitude(tmp_path):
         since = {s["key"]: s["points"] for s in c.get(f"/api/trackers/{tid}/series?since=2000").json()}
         assert since["voltage:2"] == [[2000, 4.0], [3000, 3.9]]
         assert c.get("/api/trackers/999/series").status_code == 404
+
+
+def test_gpx_uses_telemetry_track_and_skips_adverts(tmp_path):
+    with client(tmp_path) as c:
+        db = c.app.state.db
+        tid = c.get("/api/trackers").json()[0]["id"]
+        db.add_fix(tid, 1000, 47.001, 8.001, None, "telemetry")
+        db.add_fix(tid, 1100, 47.002, 8.002, None, "telemetry")
+        db.add_fix(tid, 1200, 46.000, 7.000, None, "advert")        # stale advert place, newer time
+        gpx = c.get(f"/api/trackers/{tid}/export.gpx").text
+        assert gpx.count("<trkpt") == 2 and "46.000000" not in gpx

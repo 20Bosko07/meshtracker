@@ -133,8 +133,19 @@ class Database:
         return cur.rowcount > 0
 
     def latest_fix(self, tracker_id: int) -> dict | None:
+        """Current position: the newest GPS telemetry fix. Advert positions only count
+        while there is no telemetry fix at all – their timestamps and coordinates are not
+        reliable enough to jump back to (see ``TrackerService._record_advert``)."""
         return self._one(
-            "SELECT * FROM fixes WHERE tracker_id = ? ORDER BY ts DESC, id DESC LIMIT 1",
+            "SELECT * FROM fixes WHERE tracker_id = ?"
+            " ORDER BY (source = 'telemetry') DESC, ts DESC, id DESC LIMIT 1",
+            (tracker_id,),
+        )
+
+    def latest_advert_fix(self, tracker_id: int) -> dict | None:
+        return self._one(
+            "SELECT * FROM fixes WHERE tracker_id = ? AND source = 'advert'"
+            " ORDER BY ts DESC, id DESC LIMIT 1",
             (tracker_id,),
         )
 
