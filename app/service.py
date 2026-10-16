@@ -16,7 +16,6 @@ from .lpp import extract
 
 log = logging.getLogger("meshtracker.service")
 
-ADVERT_SYNC_S = 300.0
 SANE_CLOCK_S = 2 * 86400
 
 
@@ -240,7 +239,7 @@ class TrackerService:
         for idx, tr in enumerate(trackers):
             self._rt.setdefault(tr["id"], Runtime(next_due=now + 3 + 20 * idx))
 
-        if now - self._last_advert_sync >= ADVERT_SYNC_S:
+        if now - self._last_advert_sync >= self.s.advert_sync:
             self._last_advert_sync = now
             if self.link.connected:
                 self.sync_adverts()

@@ -116,3 +116,9 @@ def test_gpx_uses_telemetry_track_and_skips_adverts(tmp_path):
         db.add_fix(tid, 1200, 46.000, 7.000, None, "advert")        # stale advert place, newer time
         gpx = c.get(f"/api/trackers/{tid}/export.gpx").text
         assert gpx.count("<trkpt") == 2 and "46.000000" not in gpx
+
+
+def test_tracker_view_shows_what_the_node_reports_from_the_last_advert(tmp_path):
+    with client(tmp_path) as c:
+        advert = c.get("/api/trackers").json()[0]["advert_now"]
+        assert advert["lat"] is not None and abs(advert["lat"] - 47.3769) < 1e-4 and advert["ts"]

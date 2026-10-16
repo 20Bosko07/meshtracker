@@ -197,3 +197,18 @@ def test_advert_timestamp_is_never_in_the_future(tmp_path):
     link._contacts[SIM_KEY]["last_advert"] = int(clock()) + 3600    # tracker clock one hour ahead
     run(svc.on_advert(SIM_KEY))
     assert db.fixes(tr["id"])[0]["ts"] <= int(clock())
+
+
+def test_advert_sync_runs_at_the_configured_interval(tmp_path):
+    db, link, svc, tr, clock = make(tmp_path, SimLink(path_breaks_after=99), advert_sync=60)
+    db.update_tracker(tr["id"], enabled=0)               # no polling in this test
+    adverts = lambda: len([f for f in db.fixes(tr["id"]) if f["source"] == "advert"])  # noqa: E731
+    run(svc.tick())                                      # the first tick syncs right away
+    assert adverts() == 1
+    link._contacts[SIM_KEY]["adv_lat"] = 47.41           # the tracker advertised a new place
+    clock.t += 30
+    run(svc.tick())
+    assert adverts() == 1                                # not due yet
+    clock.t += 40
+    run(svc.tick())
+    assert adverts() == 2                                # 70 s later it is picked up

@@ -145,6 +145,7 @@ Set in `.env` (see [`.env.example`](.env.example)):
 | `MT_FLOOD_BACKOFF` | `5` | Pause between flood retries (s) |
 | `MT_MIN_SPACING` | `10` | Minimum gap between two radio requests (s) |
 | `MT_FAIL_RETRY` | `180` | Retry sooner after a failed round (s) |
+| `MT_ADVERT_SYNC` | `60` | How often the node's contact list is checked for new advert positions (s; local, no radio traffic) |
 | `MT_LOG_LEVEL` | `INFO` | Log level |
 
 ## Troubleshooting

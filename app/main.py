@@ -136,6 +136,14 @@ def create_app(settings: Settings | None = None, link: Link | None = None) -> Fa
             raise HTTPException(404, "Tracker not found")
         return tr
 
+    def _advert_info(contact: dict | None) -> dict | None:
+        if not contact:
+            return None
+        lat, lon = contact.get("adv_lat"), contact.get("adv_lon")
+        has_pos = lat is not None and lon is not None and not (abs(lat) < 1e-6 and abs(lon) < 1e-6)
+        return {"lat": lat if has_pos else None, "lon": lon if has_pos else None,
+                "ts": int(contact.get("last_advert") or 0) or None}
+
     def view(tr: dict) -> dict:
         db = db_()
         rt = svc_().runtime(tr["id"])
@@ -151,6 +159,8 @@ def create_app(settings: Settings | None = None, link: Link | None = None) -> Fa
             "next_poll_ts": int(rt.next_due) if rt and rt.next_due else None,
             "polling": bool(rt and rt.polling),
             "known_on_node": contact is not None,
+            # what the node currently reports from the tracker's last advert
+            "advert_now": _advert_info(contact),
             "route_now": None if contact is None else ("flood" if plen < 0 else "path"),
             "hops_now": plen if plen >= 0 else None,
         }

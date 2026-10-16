@@ -51,6 +51,9 @@ class Settings:
     min_spacing: float = 10.0
     # After a completely failed poll, retry sooner (seconds).
     fail_retry: float = 180.0
+    # How often the node's contact list is checked for new advert positions (seconds).
+    # This is a local command (no radio traffic), so a short interval is cheap.
+    advert_sync: float = 60.0
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -73,4 +76,5 @@ class Settings:
             flood_backoff=_float("MT_FLOOD_BACKOFF", d.flood_backoff),
             min_spacing=_float("MT_MIN_SPACING", d.min_spacing),
             fail_retry=_float("MT_FAIL_RETRY", d.fail_retry),
+            advert_sync=_float("MT_ADVERT_SYNC", d.advert_sync),
         )

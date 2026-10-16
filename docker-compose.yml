@@ -36,6 +36,7 @@ services:
       MT_FLOOD_BACKOFF: ${MT_FLOOD_BACKOFF:-}
       MT_MIN_SPACING: ${MT_MIN_SPACING:-}
       MT_FAIL_RETRY: ${MT_FAIL_RETRY:-}
+      MT_ADVERT_SYNC: ${MT_ADVERT_SYNC:-}
       MT_LOG_LEVEL: ${MT_LOG_LEVEL:-INFO}
 
 volumes:

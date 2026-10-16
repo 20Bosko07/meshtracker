@@ -149,6 +149,7 @@ In `.env` setzen (siehe [`.env.example`](.env.example)):
 | `MT_FLOOD_BACKOFF` | `5` | Pause zwischen Flood-Wiederholungen (s) |
 | `MT_MIN_SPACING` | `10` | Mindestabstand zwischen zwei Funk-Anfragen (s) |
 | `MT_FAIL_RETRY` | `180` | Nach einer fehlgeschlagenen Runde früher erneut versuchen (s) |
+| `MT_ADVERT_SYNC` | `60` | Wie oft die Kontaktliste des Nodes auf neue Advert-Positionen geprüft wird (s; lokal, kein Funkverkehr) |
 | `MT_LOG_LEVEL` | `INFO` | Log-Stufe |
 
 ## Fehlersuche

@@ -72,6 +72,15 @@ function sensorNode(s) {
   return h("span", {}, `${m.label} `, h("b", {}, `${val}${m.unit ? " " + m.unit : ""}`));
 }
 
+// What the node reports from the tracker's last advert (live, so you can see an advert arrive).
+function advertRow(t, now) {
+  const a = t.advert_now;
+  if (!a) return null;
+  const where = a.lat == null ? "no position" : `${a.lat.toFixed(5)}, ${a.lon.toFixed(5)}`;
+  return h("div", { class: "row", title: "Position and time of the tracker's last advert, as the node reports it" },
+    `Advert: ${where}`, a.ts ? ` · heard ${ago(a.ts, now)}` : "");
+}
+
 function card(t, now) {
   const f = t.fix;
   const stale = f && now - f.ts > t.interval_min * 60 * 3;
@@ -103,6 +112,7 @@ function card(t, now) {
       `${f.lat.toFixed(5)}, ${f.lon.toFixed(5)}`, f.alt != null ? ` · ${Math.round(f.alt)} m` : "",
       stale ? h("span", { class: "warn" }, " · stale") : "",
       f.source ? ` · ${f.source === "advert" ? "Advert" : routeText(f)}` : ""),
+    advertRow(t, now),
     t.sensors.length > 0 && h("div", { class: "sensors row" }, t.sensors.map(sensorNode)),
     h("div", { class: "row" }, routePill, " ", pollInfo, " · next: ", next),
     lp && lp.error && h("div", { class: `row ${lp.ok ? "warn" : "bad"}` }, lp.error),
