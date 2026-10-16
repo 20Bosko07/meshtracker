@@ -1,3 +1,5 @@
+first of all, yes it's AI generated....
+
 # MeshTracker
 
 **Self-hosted map for [MeshCore](https://meshcore.co.uk) GPS trackers.** MeshTracker connects to your
