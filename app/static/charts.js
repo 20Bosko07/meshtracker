@@ -10,12 +10,12 @@
   const M = { l: 48, r: 14, t: 10, b: 22 };
 
   const METRICS = {
-    voltage: { label: "Akku-Spannung", unit: "V", dec: 2, order: 1 },
-    percentage: { label: "Akku", unit: "%", dec: 0, order: 2 },
+    voltage: { label: "Akku-Spannung", unit: "V", dec: 2, order: 1, nonNegative: true },
+    percentage: { label: "Akku", unit: "%", dec: 0, order: 2, nonNegative: true },
     temperature: { label: "Temperatur", unit: "°C", dec: 1, order: 3 },
-    illuminance: { label: "Licht", unit: "lx", dec: 0, order: 4 },
-    humidity: { label: "Luftfeuchte", unit: "%", dec: 0, order: 5 },
-    barometer: { label: "Luftdruck", unit: "hPa", dec: 1, order: 6 },
+    illuminance: { label: "Licht", unit: "lx", dec: 0, order: 4, nonNegative: true },
+    humidity: { label: "Luftfeuchte", unit: "%", dec: 0, order: 5, nonNegative: true },
+    barometer: { label: "Luftdruck", unit: "hPa", dec: 1, order: 6, nonNegative: true },
     gps_altitude: { label: "Höhe (GPS)", unit: "m", dec: 0, order: 7 },
     altitude: { label: "Höhe", unit: "m", dec: 0, order: 8 },
     current: { label: "Strom", unit: "A", dec: 3, order: 9 },
@@ -51,17 +51,22 @@
     day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
   });
 
-  /** Runde Achsenwerte; flache Kurven bekommen etwas Luft. */
-  function niceScale(min, max, n = 4) {
+  /** Runde Achsenwerte. Flache Kurven bekommen etwas Luft, Größen wie Licht oder
+   *  Spannung gehen nie unter 0, ganzzahlige Messwerte bekommen ganze Teilstriche. */
+  function niceScale(min, max, { n = 3, integer = false, nonNegative = false } = {}) {
     if (!(max > min)) {
-      const pad = Math.abs(min) * 0.05 || 1;
+      let pad = Math.abs(min) * 0.05;
+      if (integer) pad = Math.max(pad, 1);
+      if (!pad) pad = 1;
       min -= pad;
       max += pad;
     }
+    if (nonNegative && min < 0) min = 0;
     const step0 = (max - min) / n;
     const mag = 10 ** Math.floor(Math.log10(step0));
     const norm = step0 / mag;
-    const step = (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag;
+    let step = (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag;
+    if (integer) step = Math.max(1, step);
     const lo = Math.floor(min / step) * step;
     const hi = Math.ceil(max / step) * step;
     const digits = Math.max(0, -Math.floor(Math.log10(step)));
@@ -93,7 +98,9 @@
     const iw = W - M.l - M.r, ih = H - M.t - M.b;
     const x0 = ctx.x0, x1 = ctx.x1 > ctx.x0 ? ctx.x1 : ctx.x0 + 1;
     const vals = pts.map((p) => p[1]);
-    const sc = niceScale(Math.min(...vals), Math.max(...vals));
+    const sc = niceScale(Math.min(...vals), Math.max(...vals), {
+      integer: meta.dec === 0, nonNegative: !!meta.nonNegative,
+    });
     const x = (ts) => M.l + ((ts - x0) / (x1 - x0)) * iw;
     const y = (v) => M.t + (1 - (v - sc.lo) / (sc.hi - sc.lo)) * ih;
 
@@ -109,16 +116,17 @@
       root.append(lab);
     }
     const spanH = (x1 - x0) / 3600;
-    for (let i = 0; i <= 3; i++) {
-      const ts = x0 + ((x1 - x0) * i) / 3;
+    const nTicks = Math.max(2, Math.min(5, Math.floor(iw / 110) + 1));
+    for (let i = 0; i < nTicks; i++) {
+      const ts = x0 + ((x1 - x0) * i) / (nTicks - 1);
       const d = new Date(ts * 1000);
       const lab = svg("text", {
         class: "tick", x: x(ts), y: H - 5,
-        "text-anchor": i === 0 ? "start" : i === 3 ? "end" : "middle",
+        "text-anchor": i === 0 ? "start" : i === nTicks - 1 ? "end" : "middle",
       });
-      lab.textContent = spanH <= 36
-        ? d.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" })
-        : d.toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit" });
+      const time = d.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" });
+      const date = d.toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit" });
+      lab.textContent = spanH <= 20 ? time : spanH <= 48 ? `${date} ${time}` : date;
       root.append(lab);
     }
 
@@ -164,8 +172,9 @@
       tip.hidden = false;
       const px = x(p[0]);
       const w = tip.offsetWidth || 120;
-      tip.style.left = `${px + 12 + w > W ? px - 12 - w : px + 12}px`;
-      tip.style.top = `${Math.max(0, y(p[1]) - 40)}px`;
+      const left = px + 12 + w > W ? px - 12 - w : px + 12;
+      tip.style.left = `${Math.max(0, left)}px`;
+      tip.style.top = `${Math.max(0, Math.min(y(p[1]) - 40, H - 44))}px`;
     };
     const hide = () => {
       cross.setAttribute("visibility", "hidden"); hot.setAttribute("visibility", "hidden"); tip.hidden = true;
@@ -193,6 +202,8 @@
   /** Kurven je Messwert in `container` zeichnen. ctx: {x0, x1, gapSec}. */
   function render(container, series, ctx) {
     container._data = { series, ctx };
+    const scroller = container.closest(".charts");
+    const scrollTop = scroller ? scroller.scrollTop : 0;
     const all = sorted(series);
     container.replaceChildren();
     for (const s of all) {
@@ -207,6 +218,7 @@
     }
     const cards = container.querySelectorAll(".chart-card");
     all.forEach((s, i) => drawCard(cards[i], s, titleOf(s, all), ctx));
+    if (scroller) scroller.scrollTop = scrollTop;
     if (!container._ro && "ResizeObserver" in window) {
       let width = container.clientWidth;
       container._ro = new ResizeObserver(() => {

@@ -1,5 +1,10 @@
 FROM python:3.12-slim
 
+LABEL org.opencontainers.image.title="MeshTracker" \
+      org.opencontainers.image.description="GPS tracker map for MeshCore (via MeshMonitor Virtual Node, WiFi or USB)" \
+      org.opencontainers.image.source="https://github.com/20Bosko07/meshtracker" \
+      org.opencontainers.image.licenses="MIT"
+
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     MT_DB_PATH=/data/meshtracker.db

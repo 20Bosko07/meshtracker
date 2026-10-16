@@ -2,9 +2,13 @@
 
 
 const map = L.map("map").setView([47.37, 8.54], 11);
-L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  maxZoom: 19, attribution: "&copy; OpenStreetMap-Mitwirkende",
-}).addTo(map);
+// Kartenquelle kommt vom Server (MT_TILE_URL); ohne Antwort die Standardkarte von OpenStreetMap.
+fetch("/api/config").then((r) => r.json()).catch(() => ({})).then((cfg) => {
+  L.tileLayer(cfg.tile_url || "https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: cfg.tile_max_zoom || 19,
+    attribution: cfg.tile_attribution || "&copy; OpenStreetMap contributors",
+  }).addTo(map);
+});
 
 const state = {
   trackers: [], selected: null, layers: new Map(), fitted: false, lastTrackKey: new Map(),
@@ -295,13 +299,14 @@ async function updateCharts(force) {
     $("chart-table").replaceChildren();
     return;
   }
+  // Zeitachse auf die tatsächlich vorhandenen Messwerte zuschneiden (nicht immer 24 Std.).
   const first = Math.min(...usable.map((s) => s.points[0][0]));
   const since = sinceTs();
-  const ctx = {
-    x0: since > 0 ? since : first,
-    x1: status.now,
-    gapSec: Math.max(t.interval_min * 60 * 3, 900),
-  };
+  const x1 = Math.max(status.now, ...usable.map((s) => s.points[s.points.length - 1][0]));
+  let x0 = since > 0 ? Math.max(since, first) : first;
+  x0 = Math.min(x0, x1 - 600);
+  x0 -= (x1 - x0) * 0.02;
+  const ctx = { x0, x1, gapSec: Math.max(t.interval_min * 60 * 3, 900) };
   MeshCharts.render(grid, usable, ctx);
   MeshCharts.renderTable($("chart-table"), usable);
   setChartView();
@@ -321,6 +326,17 @@ $("chart-toggle").addEventListener("click", () => {
   updateCharts(true);
   setTimeout(() => map.invalidateSize(), 50);
 });
+// Karte folgt ihrem Container (das Diagramm-Feld ändert ihre Höhe) und bleibt auf die Tracker
+// zentriert, solange niemand selbst die Karte bewegt hat.
+state.interacted = false;
+["pointerdown", "wheel", "touchstart"].forEach((ev) =>
+  $("map").addEventListener(ev, () => { state.interacted = true; }, { passive: true }));
+if ("ResizeObserver" in window) {
+  new ResizeObserver(() => {
+    map.invalidateSize();
+    if (!state.interacted && state.fitted) fitAll();
+  }).observe($("map"));
+}
 // Dunkel/Hell wechselt: Karten-Farben neu lesen
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
   state.lastTrackKey.clear();

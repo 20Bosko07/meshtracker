@@ -5,3 +5,8 @@ __pycache__
 .pytest_cache
 *.db
 *.md
+.github
+docs
+.env
+.venv
+CHANGELOG.md

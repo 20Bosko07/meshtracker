@@ -27,6 +27,12 @@ class Settings:
 
     db_path: str = "/data/meshtracker.db"
 
+    # Kartenkacheln (der Browser lädt sie direkt vom Anbieter). Für starke Nutzung bitte einen
+    # eigenen Kachelserver oder einen Anbieter mit passendem Tarif eintragen.
+    tile_url: str = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+    tile_attribution: str = "&copy; OpenStreetMap contributors"
+    tile_max_zoom: int = 19
+
     # Optionaler Passwortschutz der Weboberfläche (HTTP Basic).
     auth_user: str = ""
     auth_password: str = ""
@@ -56,6 +62,9 @@ class Settings:
             serial_port=os.environ.get("MT_SERIAL_PORT", d.serial_port).strip(),
             serial_baud=_int("MT_SERIAL_BAUD", d.serial_baud),
             db_path=os.environ.get("MT_DB_PATH", d.db_path).strip(),
+            tile_url=os.environ.get("MT_TILE_URL", "").strip() or d.tile_url,
+            tile_attribution=os.environ.get("MT_TILE_ATTRIBUTION", "").strip() or d.tile_attribution,
+            tile_max_zoom=_int("MT_TILE_MAX_ZOOM", d.tile_max_zoom),
             auth_user=os.environ.get("MT_AUTH_USER", "").strip(),
             auth_password=os.environ.get("MT_AUTH_PASSWORD", ""),
             path_timeout_floor=_float("MT_PATH_TIMEOUT", d.path_timeout_floor),

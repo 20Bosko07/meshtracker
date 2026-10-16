@@ -159,6 +159,11 @@ def create_app(settings: Settings | None = None, link: Link | None = None) -> Fa
     async def healthz():
         return {"ok": True}
 
+    @app.get("/api/config")
+    async def config():
+        return {"tile_url": s.tile_url, "tile_attribution": s.tile_attribution,
+                "tile_max_zoom": s.tile_max_zoom}
+
     @app.get("/api/status")
     async def status():
         lk = app.state.link

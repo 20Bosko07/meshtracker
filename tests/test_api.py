@@ -72,6 +72,14 @@ def test_basic_auth(tmp_path):
         assert c.get("/api/status", auth=("u", "falsch")).status_code == 401
 
 
+def test_config_exposes_tile_settings(tmp_path):
+    with client(tmp_path, tile_url="https://tiles.example/{z}/{x}/{y}.png", tile_max_zoom=17) as c:
+        cfg = c.get("/api/config").json()
+        assert cfg["tile_url"] == "https://tiles.example/{z}/{x}/{y}.png" and cfg["tile_max_zoom"] == 17
+    with client(tmp_path) as c:
+        assert "openstreetmap" in c.get("/api/config").json()["tile_url"]
+
+
 def test_static_index_served(tmp_path):
     with client(tmp_path) as c:
         r = c.get("/")

@@ -1,3 +1,10 @@
+# MeshTracker – Docker Compose
+#
+# Einstellungen kommen aus der Datei ".env" (Vorlage: .env.example) oder aus der Umgebung.
+# Diese Datei muss man normalerweise nicht bearbeiten.
+#
+#   cp .env.example .env && nano .env
+#   docker compose up -d --build
 services:
   meshtracker:
     build: .
@@ -5,35 +12,31 @@ services:
     container_name: meshtracker
     restart: unless-stopped
     ports:
-      - "8282:8000"   # <Host-Port>:8000 – Host-Port nach Bedarf ändern
+      - "${MT_WEB_PORT:-8282}:8000"
     volumes:
       - meshtracker-data:/data
     environment:
-      # --- Verbindung zum MeshCore-Companion --------------------------------
-      # tcp    = WiFi-Companion-Firmware ODER MeshMonitor Virtual Node
-      # serial = Companion per USB (dann unten "devices" aktivieren)
-      # sim    = Simulator (Demo ohne Funkhardware)
-      MT_TRANSPORT: tcp
-      MT_HOST: 192.168.1.50      # <- IP von MeshMonitor-Host bzw. Companion
-      MT_PORT: 5000              # <- Port des Virtual Node bzw. des Companion (WiFi: 5000)
-      # MT_SERIAL_PORT: /dev/ttyACM0
-      # MT_SERIAL_BAUD: 115200
-
-      # --- Optional: Passwortschutz der Weboberfläche -------------------------
-      # MT_AUTH_USER: admin
-      # MT_AUTH_PASSWORD: bitte-aendern
-
-      # --- Feintuning (Defaults passen meistens) --------------------------------
-      # MT_FLOOD_RETRIES: 2           # Flood-Wiederholungen nach totem Pfad
-      # MT_PATH_TIMEOUT: 10           # min. Wartezeit Pfad-Versuch (s)
-      # MT_FLOOD_TIMEOUT: 25          # min. Wartezeit Flood-Versuch (s)
-      # MT_MIN_SPACING: 10            # Mindestabstand zwischen Anfragen (s)
-      # MT_FAIL_RETRY: 180            # Wiederholung nach Fehlschlag (s)
-    # Für USB-Betrieb (MT_TRANSPORT=serial):
-    # devices:
-    #   - /dev/ttyACM0:/dev/ttyACM0
-    # group_add:
-    #   - dialout
+      # Verbindung zum MeshCore-Companion
+      MT_TRANSPORT: ${MT_TRANSPORT:-tcp}
+      MT_HOST: ${MT_HOST:-192.168.1.50}
+      MT_PORT: ${MT_PORT:-5000}
+      MT_SERIAL_PORT: ${MT_SERIAL_PORT:-/dev/ttyACM0}
+      MT_SERIAL_BAUD: ${MT_SERIAL_BAUD:-115200}
+      # Optionaler Passwortschutz der Weboberfläche (beide setzen)
+      MT_AUTH_USER: ${MT_AUTH_USER:-}
+      MT_AUTH_PASSWORD: ${MT_AUTH_PASSWORD:-}
+      # Karte
+      MT_TILE_URL: ${MT_TILE_URL:-}
+      MT_TILE_ATTRIBUTION: ${MT_TILE_ATTRIBUTION:-}
+      MT_TILE_MAX_ZOOM: ${MT_TILE_MAX_ZOOM:-}
+      # Feintuning (leer = Standardwert)
+      MT_FLOOD_RETRIES: ${MT_FLOOD_RETRIES:-}
+      MT_PATH_TIMEOUT: ${MT_PATH_TIMEOUT:-}
+      MT_FLOOD_TIMEOUT: ${MT_FLOOD_TIMEOUT:-}
+      MT_FLOOD_BACKOFF: ${MT_FLOOD_BACKOFF:-}
+      MT_MIN_SPACING: ${MT_MIN_SPACING:-}
+      MT_FAIL_RETRY: ${MT_FAIL_RETRY:-}
+      MT_LOG_LEVEL: ${MT_LOG_LEVEL:-INFO}
 
 volumes:
   meshtracker-data:
