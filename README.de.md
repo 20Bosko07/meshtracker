@@ -219,7 +219,7 @@ Siehe [CONTRIBUTING.md](CONTRIBUTING.md). Übersetzungen der (deutschen) Oberfl�
 
 ## Lizenz und Danksagung
 
-[MIT](LICENSE). Vollständige Liste der Drittanbieter-Lizenzen: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Wichtigste Teile: [Leaflet](https://leafletjs.com) (BSD-2-Clause, enthalten),
+[MIT](LICENSE). Drittanbieter: [Leaflet](https://leafletjs.com) (BSD-2-Clause, enthalten),
 [meshcore_py](https://github.com/meshcore-dev/meshcore_py) (MIT), FastAPI (MIT), Uvicorn (BSD-3-Clause),
 Kartendaten © [OpenStreetMap-Mitwirkende](https://www.openstreetmap.org/copyright).
 MeshTracker ist ein unabhängiges Projekt und nicht mit MeshCore oder MeshMonitor verbunden.

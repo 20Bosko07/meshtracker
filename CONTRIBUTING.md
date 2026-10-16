@@ -29,8 +29,6 @@ MT_TRANSPORT=sim MT_DB_PATH=./dev.db uvicorn app.main:app_factory --factory --re
 
 ## Pull requests
 
-By contributing you agree that your contribution is licensed under the project's [MIT license](LICENSE).
-
 - Keep changes focused and add or update a test where behaviour changes.
 - `pytest` must pass (CI runs it plus a Docker build).
 - The interface is German. Translations / an i18n layer are a very welcome contribution.
