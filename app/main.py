@@ -1,4 +1,4 @@
-"""Web-API und Auslieferung der Karten-Oberfläche."""
+"""Web API and delivery of the map interface."""
 from __future__ import annotations
 
 import asyncio
@@ -38,14 +38,14 @@ class TrackerIn(BaseModel):
     def _key(cls, v: str) -> str:
         v = v.strip().lower()
         if not KEY_RE.match(v):
-            raise ValueError("Public Key muss aus 64 Hex-Zeichen bestehen")
+            raise ValueError("Public key must consist of 64 hex characters")
         return v
 
     @field_validator("route_mode")
     @classmethod
     def _mode(cls, v: str) -> str:
         if v not in ("auto", "flood"):
-            raise ValueError("route_mode muss 'auto' oder 'flood' sein")
+            raise ValueError("route_mode must be 'auto' or 'flood'")
         return v
 
     @field_validator("name")
@@ -53,7 +53,7 @@ class TrackerIn(BaseModel):
     def _name(cls, v: str) -> str:
         v = v.strip()
         if not v:
-            raise ValueError("Name darf nicht leer sein")
+            raise ValueError("Name must not be empty")
         return v
 
 
@@ -67,7 +67,7 @@ class TrackerPatch(BaseModel):
     @classmethod
     def _mode(cls, v: str | None) -> str | None:
         if v is not None and v not in ("auto", "flood"):
-            raise ValueError("route_mode muss 'auto' oder 'flood' sein")
+            raise ValueError("route_mode must be 'auto' or 'flood'")
         return v
 
 
@@ -80,7 +80,7 @@ def _make_link(s: Settings) -> Link:
         from .link import MeshCoreLink
 
         return MeshCoreLink(s)
-    raise SystemExit(f"Unbekannter MT_TRANSPORT: {s.transport!r} (erlaubt: tcp, serial, sim)")
+    raise SystemExit(f"Unknown MT_TRANSPORT: {s.transport!r} (allowed: tcp, serial, sim)")
 
 
 def create_app(settings: Settings | None = None, link: Link | None = None) -> FastAPI:
@@ -133,7 +133,7 @@ def create_app(settings: Settings | None = None, link: Link | None = None) -> Fa
     def need(tracker_id: int) -> dict:
         tr = db_().get_tracker(tracker_id)
         if tr is None:
-            raise HTTPException(404, "Tracker nicht gefunden")
+            raise HTTPException(404, "Tracker not found")
         return tr
 
     def view(tr: dict) -> dict:
@@ -188,7 +188,7 @@ def create_app(settings: Settings | None = None, link: Link | None = None) -> Fa
     @app.post("/api/trackers", status_code=201)
     async def add_tracker(body: TrackerIn):
         if db_().get_tracker_by_key(body.public_key):
-            raise HTTPException(409, "Dieser Tracker ist bereits angelegt")
+            raise HTTPException(409, "This tracker already exists")
         tr = db_().add_tracker(body.name, body.public_key, body.interval_min, body.route_mode)
         svc_().request_poll(tr["id"])
         return view(tr)

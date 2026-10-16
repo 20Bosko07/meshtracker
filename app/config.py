@@ -1,4 +1,4 @@
-"""Konfiguration aus Umgebungsvariablen (siehe docker-compose.yml)."""
+"""Configuration from environment variables (see .env.example)."""
 from __future__ import annotations
 
 import os
@@ -17,8 +17,8 @@ def _float(name: str, default: float) -> float:
 
 @dataclass(frozen=True)
 class Settings:
-    # Verbindung zum MeshCore-Companion: "tcp" (Node/WiFi-Companion oder
-    # MeshMonitor Virtual Node), "serial" (USB) oder "sim" (Simulator/Demo).
+    # Connection to the MeshCore companion: "tcp" (WiFi companion or
+    # MeshMonitor Virtual Node), "serial" (USB) or "sim" (simulator/demo).
     transport: str = "tcp"
     host: str = "127.0.0.1"
     port: int = 5000
@@ -27,29 +27,29 @@ class Settings:
 
     db_path: str = "/data/meshtracker.db"
 
-    # Kartenkacheln (der Browser lädt sie direkt vom Anbieter). Für starke Nutzung bitte einen
-    # eigenen Kachelserver oder einen Anbieter mit passendem Tarif eintragen.
+    # Map tiles (the browser loads them straight from the provider). For heavy use please
+    # configure your own tile server or a provider with a suitable plan.
     tile_url: str = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
     tile_attribution: str = "&copy; OpenStreetMap contributors"
     tile_max_zoom: int = 19
 
-    # Optionaler Passwortschutz der Weboberfläche (HTTP Basic).
+    # Optional password protection of the web interface (HTTP Basic).
     auth_user: str = ""
     auth_password: str = ""
 
-    # Mindestwartezeit auf eine Antwort (Sekunden). Die Firmware liefert einen
-    # eigenen Timeout-Vorschlag je nach Hops; das hier ist nur die Untergrenze.
-    # Über den MeshMonitor Virtual Node wartet dieser selbst bis zu 45 s auf den
-    # Tracker – gibt man früher auf, stapeln sich die Anfragen und späte
-    # Antworten gehen verloren. Bei direkter Anbindung darf der Wert kleiner sein.
+    # Minimum time to wait for a reply (seconds). The firmware suggests its own
+    # timeout depending on hops; this is only the lower bound. Behind MeshMonitor's
+    # Virtual Node, that node itself waits up to 45 s for the tracker – giving up
+    # earlier makes requests pile up and late replies get lost. With a direct
+    # connection a smaller value is fine.
     path_timeout_floor: float = 48.0
     flood_timeout_floor: float = 48.0
-    # Wie oft nach einem fehlgeschlagenen Pfad-Versuch per Flood wiederholt wird.
+    # How often to retry by flood after a request got no reply.
     flood_retries: int = 2
     flood_backoff: float = 5.0
-    # Mindestabstand zwischen zwei Mesh-Anfragen (Duty-Cycle schonen).
+    # Minimum gap between two mesh requests (spare the duty cycle).
     min_spacing: float = 10.0
-    # Nach komplett fehlgeschlagener Abfrage früher erneut versuchen (Sekunden).
+    # After a completely failed poll, retry sooner (seconds).
     fail_retry: float = 180.0
 
     @classmethod

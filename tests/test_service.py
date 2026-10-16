@@ -46,14 +46,14 @@ def test_path_works_first_try(tmp_path):
 
 def test_dead_path_falls_back_to_flood_immediately(tmp_path):
     link = SimLink(path_breaks_after=1, flood_loss=0.0)
-    link._path_ok_count = 1  # Pfad ist bereits veraltet
+    link._path_ok_count = 1  # the path is already stale
     db, link, svc, tr, _ = make(tmp_path, link)
     res = run(svc.poll_once(tr))
     assert res.ok and res.route == "flood"
-    assert link.calls == ["path", "flood"]  # kein zweiter Pfad-Versuch
+    assert link.calls == ["path", "flood"]  # no second path attempt
     assert link.resets == 1
     assert db.latest_fix(tr["id"])["route"] == "flood"
-    # Flood-Antwort hat dem Node einen neuen Pfad beigebracht → nächste Abfrage per Pfad
+    # the flood reply taught the node a new path → the next poll goes by path
     res2 = run(svc.poll_once(tr))
     assert res2.route == "path" and link.calls[-1] == "path"
 
@@ -63,7 +63,7 @@ def test_flood_is_retried_then_gives_up(tmp_path):
     res = run(svc.poll_once(tr))
     assert not res.ok
     assert link.calls == ["path", "flood", "flood"]
-    assert "3 Versuchen" in res.error
+    assert "3 attempts" in res.error
     assert db.latest_fix(tr["id"]) is None
     assert db.recent_polls(tr["id"])[0]["ok"] == 0
 
@@ -81,7 +81,7 @@ def test_reset_rejected_by_device_is_reported(tmp_path):
     res = run(svc.poll_once(tr))
     assert not res.ok
     assert link.calls == ["path", "path", "path"]
-    assert "Pfad-Reset fehlgeschlagen" in res.error
+    assert "Path reset failed" in res.error
 
 
 def test_response_without_gps_is_flagged(tmp_path):
@@ -89,7 +89,7 @@ def test_response_without_gps_is_flagged(tmp_path):
     link.has_gps = False
     db, link, svc, tr, _ = make(tmp_path, link)
     res = run(svc.poll_once(tr))
-    assert res.ok and not res.has_gps and "ohne GPS" in res.error
+    assert res.ok and not res.has_gps and "without GPS" in res.error
     assert db.latest_fix(tr["id"]) is None
     assert db.latest_sensors(tr["id"])  # Sensorwerte werden trotzdem gespeichert
 
@@ -98,10 +98,10 @@ def test_unknown_contact_and_disconnected(tmp_path):
     db, link, svc, tr, _ = make(tmp_path)
     other = db.add_tracker("X", "cd" * 32, 10, "auto")
     res = run(svc.poll_once(other))
-    assert not res.ok and "Kontaktliste" in res.error
+    assert not res.ok and "contact list" in res.error
     link.connected = False
     res = run(svc.poll_once(tr))
-    assert not res.ok and "Verbindung" in res.error
+    assert not res.ok and "No connection" in res.error
 
 
 def test_advert_position_is_recorded_once(tmp_path):
@@ -115,14 +115,14 @@ def test_advert_position_is_recorded_once(tmp_path):
 
 def test_tick_schedules_by_interval_and_retries_failures_sooner(tmp_path):
     db, link, svc, tr, clock = make(tmp_path, SimLink(path_breaks_after=99), fail_retry=180)
-    run(svc.tick())                      # legt Zeitplan an, noch nichts fällig
+    run(svc.tick())                      # sets up the schedule, nothing due yet
     assert db.recent_polls(tr["id"]) == []
     clock.t += 5
     run(svc.tick())
     assert len(db.recent_polls(tr["id"])) == 1
     assert svc.runtime(tr["id"]).next_due == pytest.approx(clock.t + 600)
 
-    link.connected = False               # Fehlschlag → früher erneut versuchen
+    link.connected = False               # failure → retry sooner
     svc.request_poll(tr["id"])
     run(svc.tick())
     assert svc.runtime(tr["id"]).next_due == pytest.approx(clock.t + 180)
@@ -140,12 +140,12 @@ def test_refused_by_device_stops_after_first_attempt(tmp_path):
     db, link, svc, tr, _ = make(tmp_path, SimLink(refuse=True))
     res = run(svc.poll_once(tr))
     assert not res.ok and link.calls == ["refused"] and link.resets == 0
-    assert "abgelehnt" in res.error
+    assert "refused" in res.error
 
 
 def test_stale_contact_view_still_recovers_by_resetting(tmp_path):
-    """Virtual Node zeigt „Flood“, der Node hält aber einen toten Pfad:
-    ohne Reset würden alle Versuche ins Leere laufen."""
+    """The Virtual Node shows "flood" but the node holds a dead path:
+    without a reset every attempt would run into the void."""
     link = SimLink(path_breaks_after=99, flood_loss=0.0, real_path_dead=True)
     link._contacts[SIM_KEY]["out_path_len"] = -1
     db, link, svc, tr, _ = make(tmp_path, link)

@@ -1,6 +1,6 @@
-"""Minimaler Fake eines MeshCore-Companions (TCP-Framing + die paar Befehle,
-die MeshTracker nutzt). Damit lässt sich die echte ``meshcore``-Bibliothek
-und MeshCoreLink ohne Funkhardware Ende-zu-Ende testen."""
+"""Minimal fake MeshCore companion (TCP framing + the few commands MeshTracker uses).
+It lets the real ``meshcore`` library and MeshCoreLink be tested end to end without
+radio hardware."""
 from __future__ import annotations
 
 import asyncio
@@ -24,7 +24,7 @@ def frame(data: bytes) -> bytes:
 class FakeCompanion:
     def __init__(self):
         self.path_len = 2            # -1 = Flood
-        self.path_dead = False       # Pfad antwortet nicht mehr
+        self.path_dead = False       # the path no longer answers
         self.flood_ok = True
         self.accept_reset = True
         self.refuse_binary = False   # wie MeshMonitor im Receive-Only-Modus: Err(BadState)
@@ -74,7 +74,7 @@ class FakeCompanion:
             w.write(frame(bytes([PKT_ADVERT]) + TRACKER_KEY))
             await w.drain()
 
-    # --- Verbindung ---------------------------------------------------------
+    # --- Connection ---------------------------------------------------------
 
     async def _client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         self._writers.append(writer)
@@ -126,7 +126,7 @@ class FakeCompanion:
         if not via_path and not self.flood_ok:
             return
         if not via_path:
-            self.path_len = 2  # Antwort per Flood → Node lernt neuen Pfad
+            self.path_len = 2  # reply by flood → node learns a new path
         await asyncio.sleep(0.02)
         if legacy_key is not None:
             writer.write(frame(bytes([PKT_TELEMETRY_RESPONSE, 0]) + legacy_key[:6] + self._lpp()))

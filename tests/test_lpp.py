@@ -24,7 +24,7 @@ def test_empty_and_garbage():
 
 
 def test_real_library_output_roundtrip():
-    """Format der meshcore-Bibliothek: dekodierte Cayenne-LPP-Frames."""
+    """Format of the meshcore library: decoded Cayenne LPP frames."""
     from cayennelpp import LppFrame
     from meshcore.parsing import lpp_parse
 
@@ -38,7 +38,7 @@ def test_real_library_output_roundtrip():
 
 
 def test_duplicate_channel_and_type_gets_suffix_instead_of_zigzag():
-    """Sensor- und Chip-Temperatur auf demselben Kanal dürfen sich nicht überschreiben."""
+    """Sensor and chip temperature on the same channel must not overwrite each other."""
     _, readings = extract([
         {"channel": 1, "type": "temperature", "value": 22.4},
         {"channel": 1, "type": "illuminance", "value": 0},

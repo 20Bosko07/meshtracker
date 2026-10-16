@@ -89,14 +89,14 @@ def test_static_index_served(tmp_path):
 
 def test_series_endpoint_groups_sensors_and_altitude(tmp_path):
     with client(tmp_path) as c:
-        from app.main import create_app  # noqa: F401  (App ist über den Client bereits gestartet)
+        from app.main import create_app  # noqa: F401  (the app is already started via the client)
         db = c.app.state.db
         tid = c.get("/api/trackers").json()[0]["id"]
         for ts, v, alt in [(1000, 4.1, 300.0), (2000, 4.0, 305.0), (3000, 3.9, None)]:
             db.add_sensors(tid, ts, [(2, "voltage", v), (3, "temperature", 20 + v)])
             if alt is not None:
                 db.add_fix(tid, ts, 47.0, 8.0, alt, "telemetry")
-        db.add_fix(tid, 4000, 47.0, 8.0, 999.0, "advert")   # Advert-Höhe zählt nicht
+        db.add_fix(tid, 4000, 47.0, 8.0, 999.0, "advert")   # an advert's altitude does not count
 
         data = {s["key"]: s["points"] for s in c.get(f"/api/trackers/{tid}/series").json()}
         assert data["voltage:2"] == [[1000, 4.1], [2000, 4.0], [3000, 3.9]]

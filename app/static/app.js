@@ -2,7 +2,7 @@
 
 
 const map = L.map("map").setView([47.37, 8.54], 11);
-// Kartenquelle kommt vom Server (MT_TILE_URL); ohne Antwort die Standardkarte von OpenStreetMap.
+// The tile source comes from the server (MT_TILE_URL); without an answer use OpenStreetMap.
 fetch("/api/config").then((r) => r.json()).catch(() => ({})).then((cfg) => {
   L.tileLayer(cfg.tile_url || "https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: cfg.tile_max_zoom || 19,
@@ -14,7 +14,7 @@ const state = {
   trackers: [], selected: null, layers: new Map(), fitted: false, lastTrackKey: new Map(),
   chart: { trackerId: null, key: "", view: "charts", collapsed: false },
 };
-try { state.chart.collapsed = localStorage.getItem("mt-charts-collapsed") === "1"; } catch (_) { /* kein Speicher */ }
+try { state.chart.collapsed = localStorage.getItem("mt-charts-collapsed") === "1"; } catch (_) { /* no storage available */ }
 const $ = (id) => document.getElementById(id);
 
 function h(tag, attrs, ...kids) {
@@ -38,7 +38,7 @@ async function api(path, opts) {
     try {
       const body = await res.json();
       msg = body.error || (Array.isArray(body.detail) ? body.detail.map((d) => d.msg).join("; ") : body.detail) || msg;
-    } catch (_) { /* kein JSON */ }
+    } catch (_) { /* not JSON */ }
     throw new Error(msg);
   }
   return res.status === 204 ? null : res.json();
@@ -50,25 +50,25 @@ const send = (method, path, body) => api(path, {
 function ago(ts, now) {
   if (!ts) return "–";
   const s = Math.max(0, now - ts);
-  if (s < 90) return `vor ${s} s`;
-  if (s < 5400) return `vor ${Math.round(s / 60)} Min`;
-  if (s < 172800) return `vor ${Math.round(s / 3600)} Std`;
-  return `vor ${Math.round(s / 86400)} Tagen`;
+  if (s < 90) return `${s} s ago`;
+  if (s < 5400) return `${Math.round(s / 60)} min ago`;
+  if (s < 172800) return `${Math.round(s / 3600)} h ago`;
+  return `${Math.round(s / 86400)} days ago`;
 }
-const fmtTime = (ts) => new Date(ts * 1000).toLocaleString("de-CH");
-// Farbe folgt dem Tracker (nicht der Listenposition): feste Reihenfolge, 8 Datenfarben.
+const fmtTime = (ts) => new Date(ts * 1000).toLocaleString();
+// The color follows the tracker (not its list position): fixed order, 8 data colors.
 const seriesVar = (t) => `--series-${((t.id - 1) % 8) + 1}`;
 const colorOf = (t) => getComputedStyle(document.documentElement).getPropertyValue(seriesVar(t)).trim();
 
 function routeText(f) {
   if (!f || !f.route) return f && f.source === "advert" ? "Advert" : "";
   if (f.route === "flood") return "Flood";
-  return f.hops == null ? "Pfad" : `Pfad (${f.hops} Hop${f.hops === 1 ? "" : "s"})`;
+  return f.hops == null ? "Path" : `Path (${f.hops} hop${f.hops === 1 ? "" : "s"})`;
 }
 
 function sensorNode(s) {
   const m = MeshCharts.info(s.type);
-  const val = s.value.toLocaleString("de-CH", { minimumFractionDigits: m.dec, maximumFractionDigits: m.dec });
+  const val = s.value.toLocaleString(undefined, { minimumFractionDigits: m.dec, maximumFractionDigits: m.dec });
   return h("span", {}, `${m.label} `, h("b", {}, `${val}${m.unit ? " " + m.unit : ""}`));
 }
 
@@ -79,39 +79,39 @@ function card(t, now) {
   const polling = t.polling;
 
   let pollInfo;
-  if (polling) pollInfo = h("span", { class: "warn" }, "Abfrage läuft …");
-  else if (lp && !lp.ok) pollInfo = h("span", { class: "bad" }, `Letzte Abfrage fehlgeschlagen ${ago(lp.ts, now)}`);
-  else if (lp && !lp.has_gps) pollInfo = h("span", { class: "warn" }, `Antwort ohne GPS ${ago(lp.ts, now)}`);
-  else if (lp) pollInfo = h("span", { class: "ok" }, `Letzte Abfrage ok ${ago(lp.ts, now)}`);
-  else pollInfo = "Noch keine Abfrage";
+  if (polling) pollInfo = h("span", { class: "warn" }, "Polling …");
+  else if (lp && !lp.ok) pollInfo = h("span", { class: "bad" }, `Last poll failed ${ago(lp.ts, now)}`);
+  else if (lp && !lp.has_gps) pollInfo = h("span", { class: "warn" }, `Reply without GPS ${ago(lp.ts, now)}`);
+  else if (lp) pollInfo = h("span", { class: "ok" }, `Last poll ok ${ago(lp.ts, now)}`);
+  else pollInfo = "Not polled yet";
 
-  const next = !t.enabled ? "pausiert"
-    : t.next_poll_ts ? (t.next_poll_ts <= now ? "gleich" : `in ${Math.max(1, Math.round((t.next_poll_ts - now) / 60))} Min`) : "";
+  const next = !t.enabled ? "paused"
+    : t.next_poll_ts ? (t.next_poll_ts <= now ? "any moment" : `in ${Math.max(1, Math.round((t.next_poll_ts - now) / 60))} min`) : "";
 
   const routePill = t.route_now
     ? h("span", { class: `pill ${t.route_now}` },
-        t.route_now === "flood" ? "Flood" : `Pfad${t.hops_now != null ? ` · ${t.hops_now} Hops` : ""}`)
-    : h("span", { class: "pill bad" }, "nicht auf Node");
+        t.route_now === "flood" ? "Flood" : `Path${t.hops_now != null ? ` · ${t.hops_now} hops` : ""}`)
+    : h("span", { class: "pill bad" }, "not on node");
 
-  const details = h("details", { class: "log" }, h("summary", {}, "Abfrage-Protokoll"), h("ul", { id: `log-${t.id}` }));
+  const details = h("details", { class: "log" }, h("summary", {}, "Poll log"), h("ul", { id: `log-${t.id}` }));
   details.addEventListener("toggle", () => details.open && loadLog(t.id));
 
   return h("div", { class: `card${state.selected === t.id ? " sel" : ""}`, style: `--c:var(${seriesVar(t)})` },
     h("h3", { onclick: () => select(t.id, true) }, t.name,
-      h("span", { class: "age", title: f ? fmtTime(f.ts) : "" }, f ? ago(f.ts, now) : "keine Position")),
+      h("span", { class: "age", title: f ? fmtTime(f.ts) : "" }, f ? ago(f.ts, now) : "no position")),
     f && h("div", { class: "row" },
       `${f.lat.toFixed(5)}, ${f.lon.toFixed(5)}`, f.alt != null ? ` · ${Math.round(f.alt)} m` : "",
-      stale ? h("span", { class: "warn" }, " · veraltet") : "",
+      stale ? h("span", { class: "warn" }, " · stale") : "",
       f.source ? ` · ${f.source === "advert" ? "Advert" : routeText(f)}` : ""),
     t.sensors.length > 0 && h("div", { class: "sensors row" }, t.sensors.map(sensorNode)),
-    h("div", { class: "row" }, routePill, " ", pollInfo, " · nächste: ", next),
+    h("div", { class: "row" }, routePill, " ", pollInfo, " · next: ", next),
     lp && lp.error && h("div", { class: `row ${lp.ok ? "warn" : "bad"}` }, lp.error),
     h("div", { class: "actions" },
-      h("button", { class: "primary", disabled: polling, onclick: () => act(t.id, "poll") }, "Jetzt abfragen"),
-      h("button", { title: "Gespeicherten Pfad verwerfen – nächste Abfrage per Flood", onclick: () => act(t.id, "reset-path") }, "Pfad zurücksetzen"),
-      h("button", { onclick: () => openDialog(t) }, "Bearbeiten"),
+      h("button", { class: "primary", disabled: polling, onclick: () => act(t.id, "poll") }, "Poll now"),
+      h("button", { title: "Discard the stored path – the next poll goes by flood", onclick: () => act(t.id, "reset-path") }, "Reset path"),
+      h("button", { onclick: () => openDialog(t) }, "Edit"),
       h("a", { href: `/api/trackers/${t.id}/export.gpx?since=${sinceTs()}`, download: "" }, h("button", {}, "GPX")),
-      h("button", { onclick: () => remove(t) }, "Löschen")),
+      h("button", { onclick: () => remove(t) }, "Delete")),
     details);
 }
 
@@ -125,27 +125,27 @@ async function loadLog(id) {
   if (!ul) return;
   const polls = await api(`/api/trackers/${id}/polls?limit=12`);
   ul.replaceChildren(...polls.map((p) => h("li", { class: p.ok ? (p.has_gps ? "" : "warn") : "bad" },
-    `${fmtTime(p.ts)} · ${p.ok ? "ok" : "Fehler"} · ${(p.attempts || "").split(",").join(" → ") || "–"} · ${(p.duration_ms / 1000).toFixed(1)} s`,
+    `${fmtTime(p.ts)} · ${p.ok ? "ok" : "error"} · ${(p.attempts || "").split(",").join(" → ") || "–"} · ${(p.duration_ms / 1000).toFixed(1)} s`,
     p.error ? ` · ${p.error}` : "")));
 }
 
 async function act(id, what) {
   try {
     await send("POST", `/api/trackers/${id}/${what}`);
-    if (what === "reset-path") alert("Pfad zurückgesetzt – die nächste Abfrage geht per Flood.");
+    if (what === "reset-path") alert("Path reset – the next poll goes by flood.");
   } catch (e) {
-    alert(`Fehlgeschlagen: ${e.message}`);
+    alert(`Failed: ${e.message}`);
   }
   refresh();
 }
 
 async function remove(t) {
-  if (!confirm(`Tracker „${t.name}“ samt gespeicherter Spur löschen?`)) return;
+  if (!confirm(`Delete tracker “${t.name}” including its stored track?`)) return;
   await send("DELETE", `/api/trackers/${t.id}`);
   refresh();
 }
 
-// --- Karte -------------------------------------------------------------------
+// --- Map -------------------------------------------------------------------
 
 function select(id, zoom) {
   state.selected = id;
@@ -177,7 +177,7 @@ async function drawTrack(t) {
     L.circleMarker([f.lat, f.lon], {
       radius: f.source === "advert" ? 3 : 4, color, weight: 1, fillColor: color,
       fillOpacity: f.source === "advert" ? 0.3 : 0.8,
-    }).bindPopup(`${t.name}<br>${fmtTime(f.ts)}<br>${routeText(f) || f.source}`).addTo(group);
+    }).bindPopup(h("div", {}, t.name, h("br"), fmtTime(f.ts), h("br"), routeText(f) || f.source)).addTo(group);
   }
   updateMarker(t);
 }
@@ -199,7 +199,7 @@ function fitAll() {
   state.fitted = true;
 }
 
-// --- Render / Refresh ----------------------------------------------------------
+// --- Render / refresh ----------------------------------------------------------
 
 let status = { now: Math.floor(Date.now() / 1000) };
 
@@ -213,15 +213,15 @@ async function refresh() {
   try {
     [status, state.trackers] = await Promise.all([api("/api/status"), api("/api/trackers")]);
   } catch (e) {
-    $("link-badge").textContent = "Server nicht erreichbar";
+    $("link-badge").textContent = "Server unreachable";
     $("link-badge").className = "badge off";
     return;
   }
   const b = $("link-badge");
   b.className = `badge ${status.connected ? "on" : "off"}`;
   b.textContent = status.connected
-    ? `Node verbunden${status.node_name ? ": " + status.node_name : ""}`
-    : "Node nicht verbunden";
+    ? `Node connected${status.node_name ? ": " + status.node_name : ""}`
+    : "Node not connected";
   b.title = status.connected ? `${status.transport} · ${status.target}` : (status.error || status.target);
 
   const open = new Set([...document.querySelectorAll("details.log[open]")].map((d) => d.querySelector("ul").id));
@@ -242,13 +242,13 @@ async function refresh() {
   await updateCharts(false);
 }
 
-// --- Verlaufsdiagramme -----------------------------------------------------------
+// --- History charts -----------------------------------------------------------
 
 function setChartView() {
   const table = state.chart.view === "table";
   $("chart-grid").hidden = table;
   $("chart-table").hidden = !table;
-  $("chart-view").textContent = table ? "Diagramme" : "Tabelle";
+  $("chart-view").textContent = table ? "Charts" : "Table";
 }
 
 async function updateCharts(force) {
@@ -284,7 +284,7 @@ async function updateCharts(force) {
   try {
     series = await api(`/api/trackers/${t.id}/series?since=${sinceTs()}`);
   } catch (_) { return; }
-  if (state.chart.trackerId !== t.id) return; // inzwischen anderer Tracker gewählt
+  if (state.chart.trackerId !== t.id) return; // a different tracker was selected meanwhile
 
   const grid = $("chart-grid");
   grid.style.setProperty("--c", `var(${seriesVar(t)})`);
@@ -293,13 +293,13 @@ async function updateCharts(force) {
   const usable = series.filter((s) => s.points.length > 0);
   empty.hidden = usable.length > 0;
   if (!usable.length) {
-    empty.textContent = "Noch keine Messwerte im gewählten Zeitraum. Sobald der Tracker auf eine Abfrage antwortet, "
-      + "erscheinen hier Akku, Temperatur, Licht, Höhe und alles, was er sonst noch meldet.";
+    empty.textContent = "No readings in the selected time range yet. As soon as the tracker answers a poll, "
+      + "battery, temperature, light, altitude and everything else it reports will show up here.";
     grid.replaceChildren();
     $("chart-table").replaceChildren();
     return;
   }
-  // Zeitachse auf die tatsächlich vorhandenen Messwerte zuschneiden (nicht immer 24 Std.).
+  // Fit the time axis to the readings that actually exist (not always 24 h).
   const first = Math.min(...usable.map((s) => s.points[0][0]));
   const since = sinceTs();
   const x1 = Math.max(status.now, ...usable.map((s) => s.points[s.points.length - 1][0]));
@@ -322,12 +322,12 @@ $("chart-view").addEventListener("click", () => {
 });
 $("chart-toggle").addEventListener("click", () => {
   state.chart.collapsed = !state.chart.collapsed;
-  try { localStorage.setItem("mt-charts-collapsed", state.chart.collapsed ? "1" : "0"); } catch (_) { /* egal */ }
+  try { localStorage.setItem("mt-charts-collapsed", state.chart.collapsed ? "1" : "0"); } catch (_) { /* ignore */ }
   updateCharts(true);
   setTimeout(() => map.invalidateSize(), 50);
 });
-// Karte folgt ihrem Container (das Diagramm-Feld ändert ihre Höhe) und bleibt auf die Tracker
-// zentriert, solange niemand selbst die Karte bewegt hat.
+// The map follows its container (the chart panel changes its height) and stays centered on the
+// trackers as long as nobody has moved the map themselves.
 state.interacted = false;
 ["pointerdown", "wheel", "touchstart"].forEach((ev) =>
   $("map").addEventListener(ev, () => { state.interacted = true; }, { passive: true }));
@@ -337,7 +337,7 @@ if ("ResizeObserver" in window) {
     if (!state.interacted && state.fitted) fitAll();
   }).observe($("map"));
 }
-// Dunkel/Hell wechselt: Karten-Farben neu lesen
+// Light/dark scheme changed: re-read the map colors
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
   state.lastTrackKey.clear();
   refresh();
@@ -349,7 +349,7 @@ let editing = null;
 
 async function openDialog(t) {
   editing = t || null;
-  $("dlg-title").textContent = t ? `Tracker bearbeiten` : "Tracker hinzufügen";
+  $("dlg-title").textContent = t ? "Edit tracker" : "Add tracker";
   $("pick-row").hidden = !!t;
   $("key-row").hidden = !!t;
   $("enabled-row").hidden = !t;
@@ -362,13 +362,13 @@ async function openDialog(t) {
   $("form-error").hidden = true;
   if (!t) {
     const pick = $("f-pick");
-    pick.replaceChildren(h("option", { value: "" }, "– manuell eingeben –"));
+    pick.replaceChildren(h("option", { value: "" }, "– enter manually –"));
     try {
       for (const c of await api("/api/contacts")) {
         if (c.tracked) continue;
         pick.append(h("option", { value: c.public_key }, `${c.name} (${c.public_key.slice(0, 8)}…)`));
       }
-    } catch (_) { /* Node evtl. offline */ }
+    } catch (_) { /* node may be offline */ }
   }
   $("dlg").showModal();
 }

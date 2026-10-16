@@ -1,5 +1,5 @@
-"""Verbindung zu einem MeshCore-Companion (USB, WiFi/TCP oder MeshMonitor
-Virtual Node) auf Basis der ``meshcore``-Bibliothek."""
+"""Connection to a MeshCore companion (USB, WiFi/TCP or MeshMonitor's
+Virtual Node), built on the ``meshcore`` library."""
 from __future__ import annotations
 
 import asyncio
@@ -18,7 +18,7 @@ AdvertCallback = Callable[[str], Awaitable[None]]
 
 
 def path_len(contact: dict | None) -> int:
-    """-1 = Flood (kein Pfad bekannt), 0 = direkt, n = n Hops."""
+    """-1 = flood (no path known), 0 = direct, n = n hops."""
     if not contact:
         return -1
     try:
@@ -29,8 +29,8 @@ def path_len(contact: dict | None) -> int:
 
 @dataclass
 class TelemetryReply:
-    """Ergebnis einer Telemetrie-Anfrage. ``refused``: Das Gerät hat die Anfrage
-    sofort abgelehnt (Wiederholen bringt nichts); sonst gab es nur keine Antwort."""
+    """Result of a telemetry request. ``refused``: the device rejected the request
+    right away (retrying is pointless); otherwise there was simply no reply."""
 
     lpp: list[dict] | None
     error: str | None = None
@@ -38,22 +38,22 @@ class TelemetryReply:
 
 
 REFUSAL_HINTS = {
-    "ERR_CODE_BAD_STATE": "Gerät im falschen Zustand – bei MeshMonitor: Source im Receive-Only-Modus?",
-    "ERR_CODE_UNSUPPORTED_CMD": "Befehl wird nicht unterstützt",
-    "ERR_CODE_NOT_FOUND": "Kontakt dem Gerät unbekannt",
+    "ERR_CODE_BAD_STATE": "device in the wrong state – with MeshMonitor: is the source in receive-only mode?",
+    "ERR_CODE_UNSUPPORTED_CMD": "command not supported",
+    "ERR_CODE_NOT_FOUND": "contact unknown to the device",
 }
 
 
 def describe_refusal(payload) -> str:
     code = payload.get("code_string") if isinstance(payload, dict) else None
     if not code and isinstance(payload, dict) and "error_code" in payload:
-        code = f"Fehlercode {payload['error_code']}"
+        code = f"error code {payload['error_code']}"
     hint = REFUSAL_HINTS.get(str(code))
-    return f"Anfrage abgelehnt ({code or 'unbekannt'})" + (f": {hint}" if hint else "")
+    return f"Request refused ({code or 'unknown'})" + (f": {hint}" if hint else "")
 
 
 class Link(Protocol):
-    """Was der Tracker-Dienst vom Funkgerät braucht."""
+    """What the tracker service needs from the radio."""
 
     connected: bool
     error: str
@@ -70,7 +70,7 @@ class Link(Protocol):
 
 
 class MeshCoreLink:
-    """Hält die Verbindung am Leben (Wiederverbindung mit Backoff)."""
+    """Keeps the connection alive (reconnects with backoff)."""
 
     def __init__(self, settings: Settings):
         self.s = settings
@@ -79,10 +79,10 @@ class MeshCoreLink:
         self._mc = None
         self._advert_cb: AdvertCallback | None = None
         self._stopping = False
-        # Ältere MeshMonitor-Virtual-Nodes kennen BinaryReq nicht → alter Befehl.
+        # Older MeshMonitor Virtual Nodes do not know BinaryReq → use the old command.
         self._legacy_telemetry = False
 
-    # --- Zustand -----------------------------------------------------------
+    # --- State -----------------------------------------------------------
 
     def describe(self) -> dict:
         if self.s.transport == "serial":
@@ -105,7 +105,7 @@ class MeshCoreLink:
     def set_advert_callback(self, cb: AdvertCallback) -> None:
         self._advert_cb = cb
 
-    # --- Verbindung --------------------------------------------------------
+    # --- Connection --------------------------------------------------------
 
     async def run(self) -> None:
         backoff = 5.0
@@ -136,12 +136,12 @@ class MeshCoreLink:
                     self.s.host, self.s.port,
                     auto_reconnect=True, max_reconnect_attempts=5,
                 )
-        except Exception as exc:  # Verbindungsaufbau scheitert auf viele Arten
-            self.error = f"Verbindung fehlgeschlagen: {exc}"
+        except Exception as exc:  # connecting can fail in many ways
+            self.error = f"Connection failed: {exc}"
             log.warning(self.error)
             return False
         if mc is None:
-            self.error = "Keine Antwort vom MeshCore-Node (falscher Host/Port?)"
+            self.error = "No response from the MeshCore node (wrong host/port?)"
             log.warning(self.error)
             return False
 
@@ -152,10 +152,10 @@ class MeshCoreLink:
         try:
             await self.refresh_contacts()
         except Exception as exc:
-            log.warning("Kontakte konnten nicht geladen werden: %s", exc)
+            log.warning("Could not load contacts: %s", exc)
         self.connected = True
         self.error = ""
-        log.info("Verbunden mit %s", self.describe())
+        log.info("Connected to %s", self.describe())
         return True
 
     async def _drop(self) -> None:
@@ -171,7 +171,7 @@ class MeshCoreLink:
         await self._drop()
         self.connected = False
 
-    # --- Befehle -----------------------------------------------------------
+    # --- Commands -----------------------------------------------------------
 
     async def refresh_contacts(self) -> None:
         if self._mc is None:
@@ -181,24 +181,24 @@ class MeshCoreLink:
     async def request_telemetry(self, key: str, min_timeout: float) -> TelemetryReply:
         mc = self._mc
         if mc is None:
-            return TelemetryReply(None, "nicht verbunden", refused=True)
+            return TelemetryReply(None, "not connected", refused=True)
         contact = self.get_contact(key)
         if contact is None:
-            return TelemetryReply(None, "Kontakt unbekannt", refused=True)
+            return TelemetryReply(None, "unknown contact", refused=True)
         try:
             if not self._legacy_telemetry:
                 reply = await self._telemetry_binary(mc, contact, min_timeout)
                 if not (reply.refused and "UNSUPPORTED_CMD" in (reply.error or "")):
                     return reply
-                log.info("Gerät kennt BinaryReq nicht – wechsle auf den älteren Telemetrie-Befehl")
+                log.info("Device does not know BinaryReq – switching to the older telemetry command")
                 self._legacy_telemetry = True
             return await self._telemetry_legacy(mc, contact, min_timeout)
         except Exception as exc:
-            log.warning("Telemetrie-Anfrage fehlgeschlagen: %s", exc)
-            return TelemetryReply(None, f"Fehler: {exc}")
+            log.warning("Telemetry request failed: %s", exc)
+            return TelemetryReply(None, f"Error: {exc}")
 
     async def _telemetry_binary(self, mc, contact: dict, min_timeout: float) -> TelemetryReply:
-        """Aktueller Weg: BinaryReq(TELEMETRY), Antwort per Tag zugeordnet."""
+        """Current way: BinaryReq(TELEMETRY), reply matched by tag."""
         from meshcore import EventType
         from meshcore.packets import BinaryReqType
 
@@ -207,7 +207,7 @@ class MeshCoreLink:
         )
         if sent.type == EventType.ERROR:
             reason = describe_refusal(sent.payload)
-            log.warning("Telemetrie-Anfrage: %s", reason)
+            log.warning("Telemetry request: %s", reason)
             return TelemetryReply(None, reason, refused=True)
         wait = max(sent.payload.get("suggested_timeout", 4000) / 800.0, min_timeout)
         event = await mc.dispatcher.wait_for_event(
@@ -216,13 +216,12 @@ class MeshCoreLink:
             timeout=wait,
         )
         if event is None:
-            return TelemetryReply(None, f"keine Antwort innerhalb {wait:.0f} s")
+            return TelemetryReply(None, f"no reply within {wait:.0f} s")
         return TelemetryReply(event.payload["lpp"])
 
     async def _telemetry_legacy(self, mc, contact: dict, min_timeout: float) -> TelemetryReply:
-        """Älterer Weg (SEND_TELEMETRY_REQ 0x27): Antwort kommt als Push mit
-        6-Byte-Schlüsselpräfix. Vor dem Senden abonnieren, damit keine schnelle
-        Antwort verloren geht."""
+        """Older way (SEND_TELEMETRY_REQ 0x27): the reply arrives as a push carrying the
+        6-byte key prefix. Subscribe before sending so a fast reply is not lost."""
         from meshcore import EventType
 
         key = bytes.fromhex(contact["public_key"])
@@ -238,13 +237,13 @@ class MeshCoreLink:
             sent = await mc.commands.send(b"\x27\x00\x00\x00" + key, [EventType.MSG_SENT, EventType.ERROR])
             if sent.type == EventType.ERROR:
                 reason = describe_refusal(sent.payload)
-                log.warning("Telemetrie-Anfrage (alter Befehl): %s", reason)
+                log.warning("Telemetry request (old command): %s", reason)
                 return TelemetryReply(None, reason, refused=True)
             wait = max(sent.payload.get("suggested_timeout", 4000) / 800.0, min_timeout)
             try:
                 lpp = await asyncio.wait_for(got, wait)
             except asyncio.TimeoutError:
-                return TelemetryReply(None, f"keine Antwort innerhalb {wait:.0f} s")
+                return TelemetryReply(None, f"no reply within {wait:.0f} s")
             return TelemetryReply(lpp)
         finally:
             sub.unsubscribe()
@@ -253,23 +252,23 @@ class MeshCoreLink:
         from meshcore import EventType
 
         if self._mc is None:
-            return False, "nicht verbunden"
+            return False, "not connected"
         try:
             res = await self._mc.commands.reset_path(key)
         except Exception as exc:
             return False, str(exc)
         if res.type == EventType.ERROR:
-            # Die Bibliothek löscht den Pfad lokal vorab – mit dem Gerät abgleichen.
+            # The library clears the path locally up front – resync with the device.
             try:
                 await self.refresh_contacts()
             except Exception:
                 pass
-            return False, f"Gerät lehnt Pfad-Reset ab ({res.payload})"
+            return False, f"Device refuses path reset ({res.payload})"
         return True, ""
 
     async def _on_advert(self, event) -> None:
-        # Die Bibliothek aktualisiert die Kontakte selbst (auto_update_contacts);
-        # wir holen sie sicherheitshalber vor dem Auswerten ab.
+        # The library updates contacts itself (auto_update_contacts); we fetch them
+        # once more before evaluating, to be safe.
         key = None
         payload = getattr(event, "payload", None)
         if isinstance(payload, dict):

@@ -1,6 +1,6 @@
-"""Simulator für Demo und Tests (``MT_TRANSPORT=sim``): ein Tracker, der um
-Zürich kreist, dessen Pfad regelmäßig „kaputt geht“ – so lässt sich der
-Wechsel Pfad → Flood ohne Funkhardware beobachten."""
+"""Simulator for demo and tests (``MT_TRANSPORT=sim``): a tracker circling around
+Zurich whose path "breaks" regularly – so the path → flood switch can be watched
+without radio hardware."""
 from __future__ import annotations
 
 import asyncio
@@ -24,11 +24,11 @@ class SimLink:
         self.flood_loss = flood_loss
         self.accept_reset = accept_reset
         self.refuse = refuse
-        # Der Node hält einen toten Pfad, die Kontaktliste zeigt aber „Flood“ (veraltet).
+        # The node holds a dead path but the contact list shows "flood" (stale view).
         self.real_path_dead = real_path_dead
         self.delay = delay
         self.has_gps = True
-        self.calls: list[str] = []  # "path" / "flood" je Anfrage (für Tests)
+        self.calls: list[str] = []  # "path" / "flood" per request (for tests)
         self.resets = 0
         self._rng = random.Random(seed)
         self._path_ok_count = 0
@@ -64,24 +64,24 @@ class SimLink:
     async def request_telemetry(self, key: str, min_timeout: float) -> TelemetryReply:
         c = self._contacts.get(key.lower())
         if c is None:
-            return TelemetryReply(None, "Kontakt unbekannt", refused=True)
+            return TelemetryReply(None, "unknown contact", refused=True)
         if self.refuse:
             self.calls.append("refused")
-            return TelemetryReply(None, "Anfrage abgelehnt (ERR_CODE_BAD_STATE)", refused=True)
+            return TelemetryReply(None, "Request refused (ERR_CODE_BAD_STATE)", refused=True)
         if self.delay:
             await asyncio.sleep(self.delay)
         route = "flood" if path_len(c) < 0 else "path"
         self.calls.append(route)
         if self.real_path_dead:
-            return TelemetryReply(None, "keine Antwort innerhalb 48 s")
+            return TelemetryReply(None, "no reply within 48 s")
         if route == "path":
             if self._path_ok_count >= self.path_breaks_after:
-                return TelemetryReply(None, "keine Antwort innerhalb 10 s")  # Pfad veraltet
+                return TelemetryReply(None, "no reply within 10 s")  # stale path
             self._path_ok_count += 1
         else:
             if self._rng.random() < self.flood_loss:
-                return TelemetryReply(None, "keine Antwort innerhalb 25 s")
-            # Antwort per Flood → Node lernt einen neuen Pfad
+                return TelemetryReply(None, "no reply within 25 s")
+            # Reply by flood → node learns a new path
             c["out_path_len"] = self._rng.randint(1, 3)
             c["out_path"] = "c3d4"
             self._path_ok_count = 0
@@ -99,9 +99,9 @@ class SimLink:
     async def reset_path(self, key: str) -> tuple[bool, str]:
         c = self._contacts.get(key.lower())
         if c is None:
-            return False, "unbekannter Kontakt"
+            return False, "unknown contact"
         if not self.accept_reset:
-            return False, "Gerät lehnt Pfad-Reset ab (UnsupportedCmd)"
+            return False, "Device refuses path reset (UnsupportedCmd)"
         self.resets += 1
         self.real_path_dead = False
         c["out_path_len"] = -1

@@ -1,8 +1,8 @@
-# Zusatzdatei für Companion per USB (Serial). Aufruf:
+# Additional file for a companion connected by USB (serial). Usage:
 #
 #   docker compose -f docker-compose.yml -f docker-compose.serial.yml up -d --build
 #
-# In .env:  MT_TRANSPORT=serial  und  MT_SERIAL_PORT=/dev/ttyACM0 (je nach Gerät anpassen)
+# In .env:  MT_TRANSPORT=serial  and  MT_SERIAL_PORT=/dev/ttyACM0 (adjust to your device)
 services:
   meshtracker:
     devices:

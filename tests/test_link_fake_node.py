@@ -1,4 +1,4 @@
-"""Ende-zu-Ende gegen einen Fake-Companion mit der echten meshcore-Bibliothek."""
+"""End to end against a fake companion, using the real meshcore library."""
 import asyncio
 import dataclasses
 
@@ -67,7 +67,7 @@ def test_dead_path_switches_to_flood_and_node_relearns_path(tmp_path):
         assert res.ok and res.route == "flood", res.error
         assert node.requests == ["path", "flood"] and node.resets == 1
         assert db.latest_fix(tr["id"])["route"] == "flood"
-        node.path_dead = False          # Pfad wurde neu gelernt → wieder normal
+        node.path_dead = False          # the path was relearned → normal again
         await link.refresh_contacts()
         res2 = await svc.poll_once(tr)
         assert res2.route == "path"
@@ -87,8 +87,8 @@ def test_device_refusing_reset_is_reported(tmp_path):
     async def body(node, link, svc, db, tr):
         res = await svc.poll_once(tr)
         assert not res.ok
-        assert "Pfad-Reset fehlgeschlagen" in res.error
-        # lokaler Cache wurde mit dem Gerät abgeglichen (Pfad existiert weiter)
+        assert "Path reset failed" in res.error
+        # the local cache was resynced with the device (the path still exists)
         assert link.get_contact(KEY)["out_path_len"] == 2
     run(tmp_path, lambda n: (setattr(n, "path_dead", True), setattr(n, "accept_reset", False)), body)
 
@@ -111,7 +111,7 @@ def test_refused_request_is_reported_with_reason_and_not_retried(tmp_path):
         res = await svc.poll_once(tr)
         assert not res.ok
         assert len(res.attempts) == 1
-        assert "abgelehnt" in res.error and "BAD_STATE" in res.error and "Receive-Only" in res.error
+        assert "refused" in res.error and "BAD_STATE" in res.error and "receive-only" in res.error
     run(tmp_path, lambda n: setattr(n, "refuse_binary", True), body)
 
 
@@ -119,19 +119,19 @@ def test_timeout_reports_wait_time(tmp_path):
     async def body(node, link, svc, db, tr):
         db.update_tracker(tr["id"], route_mode="flood")
         res = await svc.poll_once(db.get_tracker(tr["id"]))
-        assert not res.ok and "keine Antwort innerhalb" in res.error
+        assert not res.ok and "no reply within" in res.error
     run(tmp_path, lambda n: (setattr(n, "path_dead", True), setattr(n, "flood_ok", False)), body)
 
 
 def test_old_virtual_node_without_binary_req_uses_legacy_command(tmp_path):
-    """MeshMonitor-Stand ohne BinaryReq: Err(UnsupportedCmd) → alter Befehl 0x27."""
+    """MeshMonitor version without BinaryReq: Err(UnsupportedCmd) → old command 0x27."""
     async def body(node, link, svc, db, tr):
         res = await svc.poll_once(tr)
         assert res.ok and res.has_gps, res.error
         fix = db.latest_fix(tr["id"])
         assert abs(fix["lat"] - 47.3769) < 1e-4 and fix["route"] == "path"
         assert node.binary_attempts == 1
-        res2 = await svc.poll_once(tr)           # merkt sich den Weg, kein erneuter BinaryReq
+        res2 = await svc.poll_once(tr)           # remembers the way, no new BinaryReq
         assert res2.ok and node.binary_attempts == 1
         assert {s["type"] for s in db.latest_sensors(tr["id"])} == {"voltage", "temperature"}
     run(tmp_path, lambda n: setattr(n, "legacy_only", True), body)

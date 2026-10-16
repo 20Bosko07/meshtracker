@@ -21,13 +21,13 @@ Telemetrie-Antwort aber nicht auf die Karte. MeshTracker fragt den Tracker selbs
 ## Funktionen
 
 - **Spur auf der Karte** aus GPS-Telemetrie (und aus Adverts); GPX-Export
-- **Abfrage-Intervall pro Tracker** (Standard 10 Min) und Knopf *Jetzt abfragen*
+- **Abfrage-Intervall pro Tracker** (Standard 10 Min) und Knopf *Poll now* (jetzt abfragen)
 - **Pfad → Flood automatisch:** Antwortet der gespeicherte Pfad nicht, wird er zurückgesetzt und sofort
-  per Flood wiederholt. Optional *Immer Flood* für bewegte Tracker
+  per Flood wiederholt. Optional *Always flood* (immer Flood) für bewegte Tracker
 - **Verlaufsdiagramme** für jeden Wert, den der Tracker sendet (Akku-Spannung, Temperatur, Licht,
   Luftdruck, GPS-Höhe, …): eine kleine Kurve pro Wert, Werte per Maus/Tastatur, Tabellenansicht, Lücken
   bleiben Lücken
-- **Abfrage-Protokoll**: welcher Weg, wie lange, und *warum* eine Anfrage scheiterte
+- **Poll log** (Abfrage-Protokoll): welcher Weg, wie lange, und *warum* eine Anfrage scheiterte
 - Hell/Dunkel, handytauglich, optionaler Passwortschutz, SQLite in einem Docker-Volume
 
 ## Voraussetzungen
@@ -47,8 +47,8 @@ nano .env                     # MT_HOST und MT_PORT eintragen (siehe „Anbindun
 docker compose up -d --build
 ```
 
-Öffne **http://\<server\>:8282**. Das Feld oben links wird grün („Node verbunden“), sobald die Verbindung
-steht. Dann **+ Tracker hinzufügen** klicken, den Tracker aus den Kontakten des Nodes wählen (oder seinen
+Öffne **http://\<server\>:8282**. Das Feld oben links wird grün („Node connected“), sobald die Verbindung
+steht. Dann **+ Add tracker** klicken, den Tracker aus den Kontakten des Nodes wählen (oder seinen
 64-stelligen Public Key einfügen), Intervall wählen, fertig.
 
 Ohne Funkhardware: `MT_TRANSPORT=sim docker compose up --build` startet einen simulierten Tracker, dessen
@@ -69,8 +69,8 @@ sich dort wie eine normale Companion-App.
    (`ports:` → `"7555:7555"`, mit deinem Port) und dort `docker compose up -d` ausführen.
 3. In MeshMonitor **Admin-Befehle** am Virtual Node erlauben (`allowAdminCommands` im Code). Ohne das
    reicht MeshMonitor den Befehl *Pfad zurücksetzen* nicht durch; Telemetrie geht trotzdem, aber der
-   Wechsel Pfad→Flood kann den Pfad nicht zurücksetzen (das Abfrage-Protokoll meldet dann
-   „Pfad-Reset fehlgeschlagen“).
+   Wechsel Pfad→Flood kann den Pfad nicht zurücksetzen (das Poll log meldet dann
+   „Path reset failed“).
 4. In `.env`: `MT_TRANSPORT=tcp`, `MT_HOST=<IP des MeshMonitor-Rechners>` (nicht `localhost` – die
    Verbindung wird aus dem Container heraus aufgebaut), `MT_PORT=<Port des Virtual Node>`.
 5. In MeshMonitor die **eigene periodische Telemetrie-Abfrage für den Tracker ausschalten** – zwei
@@ -112,7 +112,7 @@ Ein MeshCore-Node beantwortet Telemetrie-Anfragen nur, wenn sein Besitzer es erl
   **Environment** (Sensoren) erlauben. Die Modi sind *alle erlauben* oder *per Kontakt-Flags*; bei
   Letzterem muss der anfragende Node ein Kontakt mit den passenden Telemetrie-Rechten sein.
 - Der Tracker braucht einen **GPS-Fix**. Ohne Fix antwortet er ohne Position – MeshTracker zeigt dann
-  „Antwort ohne GPS“, statt einen falschen Punkt zu setzen.
+  „Reply without GPS position“, statt einen falschen Punkt zu setzen.
 - Der Tracker muss auf deinem Node als **Kontakt** bekannt sein (der Node muss seinen Advert gehört haben).
 
 Welche Sensoren auftauchen, entscheidet der Tracker, nicht MeshTracker: Jeder Wert aus der Antwort wird
@@ -120,15 +120,15 @@ automatisch gespeichert und als Diagramm angezeigt.
 
 ## Bedienung
 
-- **Routing** (pro Tracker, *Bearbeiten*):
+- **Routing** (pro Tracker, *Edit*):
   - *Auto* – zuerst der auf dem Node gespeicherte Pfad. Kommt keine Antwort rechtzeitig, wird der Pfad
     zurückgesetzt und die Anfrage per Flood wiederholt (bis zu `MT_FLOOD_RETRIES`-mal).
-  - *Immer Flood* – vor jeder Abfrage den Pfad zurücksetzen. Am zuverlässigsten für einen bewegten
+  - *Always flood* – vor jeder Abfrage den Pfad zurücksetzen. Am zuverlässigsten für einen bewegten
     Tracker, kostet etwas mehr Funkzeit.
 - **Intervall:** Jede Abfrage sendet 1–3 Funk-Anfragen. Intervalle unter 5 Minuten belasten das Mesh
   (Duty-Cycle) und sind nur zum Testen gedacht.
-- **Abfrage-Protokoll** (an der Tracker-Karte aufklappen): Zeit, Weg, Dauer und Grund jedes Versuchs.
-- **Zeitraum** (oben rechts) gilt für Karten-Spur und Diagramme; die Tabellenansicht zeigt dieselben Werte.
+- **Poll log** (an der Tracker-Karte aufklappen): Zeit, Weg, Dauer und Grund jedes Versuchs.
+- **Time range** (oben rechts) gilt für Karten-Spur und Diagramme; die Tabellenansicht (*Table*) zeigt dieselben Werte.
   Der GPX-Export nutzt denselben Zeitraum.
 
 ## Einstellungen
@@ -154,14 +154,14 @@ In `.env` setzen (siehe [`.env.example`](.env.example)):
 
 | Was du siehst | Bedeutung / Lösung |
 |---|---|
-| Feld **Node nicht verbunden**, Log `Connect call failed … Connection refused` | Auf `MT_HOST:MT_PORT` lauscht nichts. IP/Port prüfen; bei MeshMonitor in Docker muss der Virtual-Node-Port freigegeben sein. Test auf dem Server: `nc -zv <host> <port>` |
-| `Keine Antwort vom MeshCore-Node (falscher Host/Port?)` | Der Port ist offen, aber kein MeshCore-Companion-Port (z. B. MeshMonitors Web-Port) |
-| `Anfrage abgelehnt (ERR_CODE_BAD_STATE)` | MeshMonitor verweigert das Senden, z. B. weil die Source im *Receive-Only*-Modus ist |
-| `Anfrage abgelehnt (ERR_CODE_UNSUPPORTED_CMD)` | Node/Virtual Node kennt den Befehl nicht. MeshTracker wechselt selbst auf den älteren Befehl; bleibt es, MeshMonitor aktualisieren |
-| `Keine Antwort nach 3 Versuchen (…)` | Die Anfrage ging raus, der Tracker antwortete nicht: außer Reichweite, Telemetrie nicht erlaubt oder zwei Abfragende kollidieren (MeshMonitors eigene Abfrage für diesen Tracker ausschalten) |
-| `Antwort ohne GPS-Position` | Der Tracker antwortete, hat aber keinen GPS-Fix oder Standort-Telemetrie ist nicht erlaubt |
-| `Tracker nicht in der Kontaktliste des Nodes` | Der Node hat den Advert des Trackers noch nicht gehört – abwarten oder den Kontakt am Node hinzufügen |
-| `Pfad-Reset fehlgeschlagen` | MeshMonitors Virtual Node erlaubt keine Admin-Befehle (siehe *Anbindung → A*, Schritt 3) |
+| Feld **Node not connected**, Log `Connect call failed … Connection refused` | Auf `MT_HOST:MT_PORT` lauscht nichts. IP/Port prüfen; bei MeshMonitor in Docker muss der Virtual-Node-Port freigegeben sein. Test auf dem Server: `nc -zv <host> <port>` |
+| `No response from the MeshCore node (wrong host/port?)` | Der Port ist offen, aber kein MeshCore-Companion-Port (z. B. MeshMonitors Web-Port) |
+| `Request refused (ERR_CODE_BAD_STATE)` | MeshMonitor verweigert das Senden, z. B. weil die Source im *Receive-Only*-Modus ist |
+| `Request refused (ERR_CODE_UNSUPPORTED_CMD)` | Node/Virtual Node kennt den Befehl nicht. MeshTracker wechselt selbst auf den älteren Befehl; bleibt es, MeshMonitor aktualisieren |
+| `No reply after 3 attempts (…)` | Die Anfrage ging raus, der Tracker antwortete nicht: außer Reichweite, Telemetrie nicht erlaubt oder zwei Abfragende kollidieren (MeshMonitors eigene Abfrage für diesen Tracker ausschalten) |
+| `Reply without GPS position` | Der Tracker antwortete, hat aber keinen GPS-Fix oder Standort-Telemetrie ist nicht erlaubt |
+| `Tracker is not in the node's contact list` | Der Node hat den Advert des Trackers noch nicht gehört – abwarten oder den Kontakt am Node hinzufügen |
+| `Path reset failed` | MeshMonitors Virtual Node erlaubt keine Admin-Befehle (siehe *Anbindung → A*, Schritt 3) |
 | `port is already allocated` bei `docker compose up` | Port 8282 ist belegt – in `.env` einen anderen `MT_WEB_PORT` setzen |
 | Karte grau | Der Browser erreicht den Kachelserver nicht (Internetzugang oder `MT_TILE_URL`) |
 
@@ -208,13 +208,13 @@ pytest                                           # Logik, API und Ende-zu-Ende g
 MT_TRANSPORT=sim MT_DB_PATH=./dev.db uvicorn app.main:app_factory --factory --reload
 ```
 
-Siehe [CONTRIBUTING.md](CONTRIBUTING.md). Übersetzungen der (deutschen) Oberfläche sind willkommen.
+Siehe [CONTRIBUTING.md](CONTRIBUTING.md). Weitere Sprachen für die Oberfläche sind willkommen.
 
 ## Stand und Grenzen
 
 - Genutzt mit MeshMonitors Virtual Node und einem T1000-E-Tracker. Direkte WiFi-/USB-Verbindungen:
   nur automatische Tests (siehe oben). Kein BLE.
-- Oberfläche und Meldungen sind nur auf Deutsch.
+- Die Oberfläche ist vorerst nur auf Englisch.
 - Ein Companion-Node pro MeshTracker-Instanz.
 
 ## Lizenz und Danksagung

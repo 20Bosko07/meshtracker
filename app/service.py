@@ -1,6 +1,6 @@
-"""Zeitplan und Abfragelogik: pro Tracker regelmäßig eine Telemetrie-Anfrage,
-mit automatischem Wechsel von gespeichertem Pfad auf Flood, wenn der Pfad
-nicht (mehr) funktioniert."""
+"""Scheduling and polling logic: one telemetry request per tracker at a regular
+interval, with an automatic switch from the stored path to flood when the path
+no longer works."""
 from __future__ import annotations
 
 import asyncio
@@ -65,13 +65,13 @@ class TrackerService:
         self._last_advert_sync = 0.0
         link.set_advert_callback(self.on_advert)
 
-    # --- Zustand für die API -------------------------------------------------
+    # --- State for the API -------------------------------------------------
 
     def runtime(self, tracker_id: int) -> Runtime | None:
         return self._rt.get(tracker_id)
 
     def request_poll(self, tracker_id: int) -> bool:
-        """Sofort-Abfrage vormerken (wird vom Zeitplan-Loop ausgeführt)."""
+        """Queue an immediate poll (run by the scheduler loop)."""
         rt = self._rt.get(tracker_id)
         if rt is None:
             rt = self._rt[tracker_id] = Runtime(next_due=0.0)
@@ -79,7 +79,7 @@ class TrackerService:
         return True
 
     def reschedule(self, tracker_id: int) -> None:
-        """Nach Änderung des Intervalls: nächste Abfrage neu berechnen."""
+        """After the interval changed: recompute the next poll."""
         tr = self.db.get_tracker(tracker_id)
         rt = self._rt.get(tracker_id)
         if tr is None or rt is None:
@@ -87,7 +87,7 @@ class TrackerService:
         base = rt.last_end if rt.last_end is not None else self._clock()
         rt.next_due = min(rt.next_due, base + tr["interval_min"] * 60)
 
-    # --- Abfrage eines Trackers ---------------------------------------------
+    # --- Polling one tracker ---------------------------------------------
 
     async def poll_once(self, tr: dict) -> PollResult:
         async with self._mesh_lock:
@@ -109,28 +109,28 @@ class TrackerService:
             return result
 
         if not self.link.connected:
-            return finish(PollResult(False, error="Keine Verbindung zum MeshCore-Node"))
+            return finish(PollResult(False, error="No connection to the MeshCore node"))
 
-        # Kontaktliste neu holen: Über den MeshMonitor Virtual Node ändert sich der
-        # Pfad des Trackers, ohne dass wir einen Push bekommen.
+        # Refresh the contact list: behind MeshMonitor's Virtual Node the tracker's
+        # path changes without us receiving a push.
         try:
             await self.link.refresh_contacts()
         except Exception as exc:
-            log.warning("Kontaktliste konnte nicht aktualisiert werden: %s", exc)
+            log.warning("Could not refresh the contact list: %s", exc)
         contact = self.link.get_contact(key)
         if contact is None:
             return finish(PollResult(
                 False,
-                error="Tracker nicht in der Kontaktliste des Nodes – Advert abwarten "
-                      "oder Kontakt auf dem Node hinzufügen",
+                error="Tracker is not in the node's contact list – wait for its advert "
+                      "or add the contact on the node",
             ))
 
-        # Modus „immer Flood“: gespeicherten Pfad vor jeder Abfrage verwerfen –
-        # unabhängig davon, was unsere Kontaktkopie zeigt (sie kann veraltet sein).
+        # "Always flood" mode: drop the stored path before every poll – regardless of
+        # what our contact copy shows (it may be stale).
         if tr["route_mode"] == "flood":
             ok, why = await self.link.reset_path(key)
             if not ok:
-                notes.append(f"Pfad-Reset fehlgeschlagen: {why}")
+                notes.append(f"Path reset failed: {why}")
             contact = self.link.get_contact(key) or contact
 
         max_attempts = 1 + max(0, self.s.flood_retries)
@@ -148,21 +148,21 @@ class TrackerService:
                 break
             last_reason = reply.error or ""
             if reply.refused:
-                break  # Gerät lehnt ab – Wiederholen oder Pfad-Reset bringt nichts
-            # Keine Antwort → der Pfad auf dem Node kann tot sein, auch wenn unsere
-            # Kontaktkopie „Flood“ zeigt. Immer zurücksetzen: Der nächste Versuch (und
-            # die nächste geplante Abfrage) geht dann sicher per Flood.
+                break  # Device refuses – retrying or resetting the path will not help
+            # No reply → the path on the node may be dead even if our contact copy
+            # says "flood". Always reset: the next attempt (and the next scheduled
+            # poll) then definitely goes by flood.
             ok, why = await self.link.reset_path(key)
             if not ok:
-                notes.append(f"Pfad-Reset fehlgeschlagen: {why}")
+                notes.append(f"Path reset failed: {why}")
             if route == "flood" and n < max_attempts - 1:
                 await self._sleep(self.s.flood_backoff)
 
         if lpp is None:
-            if last_reason.startswith("Anfrage abgelehnt"):
+            if last_reason.startswith("Request refused"):
                 msg = last_reason
             else:
-                msg = f"Keine Antwort nach {len(attempts)} Versuchen ({' → '.join(attempts)})"
+                msg = f"No reply after {len(attempts)} attempts ({' → '.join(attempts)})"
                 if last_reason:
                     msg += f": {last_reason}"
             if notes:
@@ -181,7 +181,7 @@ class TrackerService:
             self.db.add_fix(tr["id"], now, fix.lat, fix.lon, fix.alt, "telemetry", route, hops)
             error = "; ".join(dict.fromkeys(notes)) or None
             return finish(PollResult(True, True, route, error=error))
-        error = "Antwort ohne GPS-Position (kein GPS-Fix oder Standort-Telemetrie nicht erlaubt)"
+        error = "Reply without GPS position (no GPS fix, or location telemetry not allowed)"
         return finish(PollResult(True, False, route, error=error))
 
     async def reset_path_manual(self, tr: dict) -> tuple[bool, str]:
@@ -206,7 +206,7 @@ class TrackerService:
         stamp = int(contact.get("last_advert") or 0)
         if abs(stamp - now) < SANE_CLOCK_S:
             ts = stamp
-        else:  # Uhr des Trackers ungestellt: nur bei geänderter Position speichern
+        else:  # tracker clock not set: only store when the position changed
             last = self.db.latest_fix(tr["id"])
             if last and last["source"] == "advert" and \
                     abs(last["lat"] - lat) < 1e-6 and abs(last["lon"] - lon) < 1e-6:
@@ -218,7 +218,7 @@ class TrackerService:
         for tr in self.db.list_trackers():
             self._record_advert(tr)
 
-    # --- Zeitplan ------------------------------------------------------------
+    # --- Scheduler ------------------------------------------------------------
 
     async def run(self) -> None:
         while True:
@@ -227,7 +227,7 @@ class TrackerService:
             except asyncio.CancelledError:
                 raise
             except Exception:
-                log.exception("Fehler im Zeitplan-Loop")
+                log.exception("Error in the scheduler loop")
             await self._sleep(2)
 
     async def tick(self) -> None:
@@ -264,5 +264,5 @@ class TrackerService:
         rt.last_end = end
         interval = tr["interval_min"] * 60
         rt.next_due = end + (interval if result.ok else min(interval, self.s.fail_retry))
-        log.info("Tracker %s: %s via %s (%s)", tr["name"], "ok" if result.ok else "FEHLER",
+        log.info("Tracker %s: %s via %s (%s)", tr["name"], "ok" if result.ok else "FAILED",
                  "→".join(result.attempts) or "-", result.error or "")

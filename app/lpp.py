@@ -1,6 +1,6 @@
-"""Auswertung der Cayenne-LPP-Telemetrie, die ein MeshCore-Node auf eine
-Telemetrie-Anfrage zurückschickt (von der meshcore-Bibliothek bereits als
-Liste von ``{"channel", "type", "value"}`` dekodiert)."""
+"""Evaluation of the Cayenne LPP telemetry a MeshCore node sends back in reply to a
+telemetry request (already decoded by the meshcore library into a list of
+``{"channel", "type", "value"}``)."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -23,19 +23,19 @@ class Reading:
 def _valid_fix(lat: float, lon: float) -> bool:
     if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
         return False
-    # (0, 0) liefert ein Tracker ohne GPS-Fix.
+    # A tracker without a GPS fix reports (0, 0).
     return not (abs(lat) < 1e-6 and abs(lon) < 1e-6)
 
 
 def extract(lpp: list[dict] | None) -> tuple[Fix | None, list[Reading]]:
-    """Trennt die GPS-Position von den übrigen Sensorwerten."""
+    """Separate the GPS position from the other sensor values."""
     fix: Fix | None = None
     readings: list[Reading] = []
     seen: dict[tuple[int, str], int] = {}
 
     def add(channel: int, kind: str, value: float) -> None:
-        # Die Firmware hängt z. B. die Chip-Temperatur auf denselben Kanal wie den
-        # Temperatursensor. Der erste Wert behält den Namen, weitere bekommen _2, _3 …
+        # The firmware appends e.g. the chip temperature on the same channel as the
+        # temperature sensor. The first value keeps the name, further ones get _2, _3 …
         n = seen[(channel, kind)] = seen.get((channel, kind), 0) + 1
         readings.append(Reading(channel, kind if n == 1 else f"{kind}_{n}", value))
 

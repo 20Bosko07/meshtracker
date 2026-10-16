@@ -1,4 +1,4 @@
-"""SQLite-Persistenz für Tracker, Positionen, Sensorwerte und Abfrage-Protokoll."""
+"""SQLite persistence for trackers, positions, sensor values and the poll log."""
 from __future__ import annotations
 
 import sqlite3
@@ -112,7 +112,7 @@ class Database:
     def list_trackers(self) -> list[dict]:
         return self._all("SELECT * FROM trackers ORDER BY id")
 
-    # --- Positionen --------------------------------------------------------
+    # --- Positions --------------------------------------------------------
 
     def add_fix(
         self,
@@ -146,7 +146,7 @@ class Database:
         )
         return rows
 
-    # --- Sensoren ----------------------------------------------------------
+    # --- Sensors ----------------------------------------------------------
 
     def add_sensors(self, tracker_id: int, ts: int, readings: Iterable[tuple[int, str, float]]) -> None:
         with self._lock:
@@ -167,7 +167,7 @@ class Database:
         )
 
     def series(self, tracker_id: int, since: int = 0, limit: int = 5000) -> list[dict]:
-        """Verlauf je Messwert (Sensoren + GPS-Höhe) als [[ts, wert], …]."""
+        """History per measurement (sensors + GPS altitude) as [[ts, value], …]."""
         grouped: dict[tuple[str, int], list[list[float]]] = {}
         rows = self._all(
             "SELECT channel, type, ts, value FROM (SELECT channel, type, ts, value FROM sensors"
@@ -190,7 +190,7 @@ class Database:
                         "points": [[r["ts"], r["alt"]] for r in alt]})
         return out
 
-    # --- Abfrage-Protokoll -------------------------------------------------
+    # --- Poll log -------------------------------------------------
 
     def add_poll(
         self,
@@ -216,7 +216,7 @@ class Database:
         )
 
     def prune(self, keep_days: int = 30, sensor_days: int = 365) -> None:
-        """Alte Protokoll- und Sensoreinträge löschen (Positionen bleiben)."""
+        """Delete old poll-log and sensor entries (positions are kept)."""
         now = int(time.time())
         self._exec("DELETE FROM polls WHERE ts < ?", (now - keep_days * 86400,))
         self._exec("DELETE FROM sensors WHERE ts < ?", (now - sensor_days * 86400,))
